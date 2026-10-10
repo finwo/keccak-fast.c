@@ -39,7 +39,7 @@ int main(void) {
   const uint8_t *abc = (const uint8_t *)"abc";
   const uint8_t *nil = NULL;
 
-  printf("1..16\n");
+  printf("1..22\n");
 
   check("shake128 empty", kf_shake128, nil, 0,
         "7f9c2ba4e88f827d616045507605853ed73b8093f6efbc88eb1a6eacfa66ef26");
@@ -74,6 +74,22 @@ int main(void) {
   check("sha3_512 abc", kf_sha3_512, abc, 3,
         "b751850b1a57168a5693cd924b6b096e08f621827444f70d884f5d0240d2712e"
         "10e116e9192af3c91a7ec57647e3934057340b4cf408d5a56592f8274eec53f0");
+
+  check("turboshake128 empty", kf_turboshake128, nil, 0,
+        "1e415f1c5983aff2169217277d17bb538cd945a397ddec541f1ce41af2c1b74c");
+  check("turboshake128 abc", kf_turboshake128, abc, 3,
+        "dcf1646dfe993a8eb6b782d1faaca6d82416a5dcf1de98ee3c6dbc5e1dc63018");
+  check("turboshake128 200", kf_turboshake128, qbf, 200,
+        "5b96f9aac16a9047cd03b83c950fb6b074a31ea05f0aaa3aa3a7f98deaab289c");
+  check("turboshake256 empty", kf_turboshake256, nil, 0,
+        "367a329dafea871c7802ec67f905ae13c57695dc2c6663c61035f59a18f8e7db"
+        "11edc0e12e91ea60eb6b32df06dd7f002fbafabb6e13ec1cc20d995547600db0");
+  check("turboshake256 abc", kf_turboshake256, abc, 3,
+        "63824b1431a7372e85edc022c9d7afdd027472fcfa33c887d6f5aaf8dc5d4db6"
+        "8afbcb5714b49b7ffd8dd115dd5bd5436f837236845a230d6969a4083a113617");
+  check("turboshake256 200", kf_turboshake256, qbf, 200,
+        "c27b5422da9177efaf2a335b6ea79cb57961a8cc3ca8f870f17ebbbfd662086a"
+        "fe62a10085fb7c413fcc0f586aa938d152254a77aa0d682eb846c82199428a71");
 
   {
     uint8_t out[64];

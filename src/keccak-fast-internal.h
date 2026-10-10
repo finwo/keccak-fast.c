@@ -35,6 +35,10 @@ int kf_scalar_sha3_384(uint8_t *out, size_t outlen, const uint8_t *in,
                        size_t inlen);
 int kf_scalar_sha3_512(uint8_t *out, size_t outlen, const uint8_t *in,
                        size_t inlen);
+int kf_scalar_turboshake128(uint8_t *out, size_t outlen, const uint8_t *in,
+                            size_t inlen);
+int kf_scalar_turboshake256(uint8_t *out, size_t outlen, const uint8_t *in,
+                            size_t inlen);
 void kf_scalar_permute(uint64_t state[25]);
 void kf_scalar_batch(uint64_t states[][25], size_t count);
 

@@ -43,31 +43,36 @@ static const uint64_t RC[24] = {
   v = 0;              \
   REPEAT5(e; v += s;)
 
-static inline void keccakf(void *state) {
-  uint64_t *a    = (uint64_t *)state;
-  uint64_t  b[5] = {0};
-  uint64_t  t    = 0;
-  uint8_t   x, y;
-
-  for (int i = 0; i < 24; i++) {
-    /* theta */
-    FOR5(x, 1, b[x] = 0; FOR5(y, 5, b[x] ^= a[x + y];))
-    FOR5(x, 1, FOR5(y, 5, a[y + x] ^= b[(x + 4) % 5] ^ rol(b[(x + 1) % 5], 1);))
-    /* rho and pi */
-    t = a[1];
-    x = 0;
-    REPEAT24(b[0] = a[pi[x]];
-             a[pi[x]] = rol(t, rho[x]);
-             t = b[0];
-             x++;)
-    /* chi */
-    FOR5(y,
-         5,
-         FOR5(x, 1, b[x] = a[y + x];)
-         FOR5(x, 1, a[y + x] = b[x] ^ ((~b[(x + 1) % 5]) & b[(x + 2) % 5]);))
-    /* iota */
-    a[0] ^= RC[i];
+#define KF_ROUNDS(FIRST)                                                        \
+  uint64_t *a    = (uint64_t *)state;                                           \
+  uint64_t  b[5] = {0};                                                         \
+  uint64_t  t    = 0;                                                           \
+  uint8_t   x, y;                                                               \
+  for (int i = (FIRST); i < 24; i++) {                                          \
+    /* theta */                                                                 \
+    FOR5(x, 1, b[x] = 0; FOR5(y, 5, b[x] ^= a[x + y];))                         \
+    FOR5(x, 1, FOR5(y, 5, a[y + x] ^= b[(x + 4) % 5] ^ rol(b[(x + 1) % 5], 1);)) \
+    /* rho and pi */                                                            \
+    t = a[1];                                                                   \
+    x = 0;                                                                      \
+    REPEAT24(b[0] = a[pi[x]];                                                   \
+             a[pi[x]] = rol(t, rho[x]);                                         \
+             t = b[0];                                                          \
+             x++;)                                                              \
+    /* chi */                                                                   \
+    FOR5(y, 5,                                                                  \
+         FOR5(x, 1, b[x] = a[y + x];)                                          \
+         FOR5(x, 1, a[y + x] = b[x] ^ ((~b[(x + 1) % 5]) & b[(x + 2) % 5]);))  \
+    /* iota */                                                                  \
+    a[0] ^= RC[i];                                                              \
   }
+
+static inline void keccakf(void *state) {
+  KF_ROUNDS(0)
+}
+
+static inline void keccak12(void *state) {
+  KF_ROUNDS(12)
 }
 
 #define _(S) do { S } while (0)
@@ -87,36 +92,46 @@ mkapply_sd(setout, dst[i] = src[i])
 
 #define Plen 200
 
-#define foldP(I, L, F) \
-  while (L >= rate) {  \
-    F(a, I, rate);     \
-    keccakf(a);        \
-    I += rate;         \
-    L -= rate;         \
+#define foldP(I, L, F, PERM) \
+  while (L >= rate) {      \
+    F(a, I, rate);         \
+    PERM(a);               \
+    I += rate;             \
+    L -= rate;             \
   }
 
-static inline int kf_hash_impl(uint8_t *out, size_t outlen,
-                               const uint8_t *in, size_t inlen,
-                               size_t rate, uint8_t delim) {
+#define KF_HASH_BODY(PERM)                                                     \
+  uint8_t a[Plen] = {0};                                                       \
+  foldP(in, inlen, xorin, PERM);                                               \
+  a[inlen] ^= delim;                                                           \
+  a[rate - 1] ^= 0x80;                                                         \
+  xorin(a, in, inlen);                                                         \
+  PERM(a);                                                                     \
+  foldP(out, outlen, setout, PERM);                                            \
+  setout(a, out, outlen);                                                      \
+  memset_s(a, 200, 0, 200);                                                    \
+  return 0
+
+static inline int kf_hash24(uint8_t *out, size_t outlen, const uint8_t *in,
+                            size_t inlen, size_t rate, uint8_t delim) {
   if ((out == NULL) || ((in == NULL) && inlen != 0) || (rate >= Plen)) {
     return -1;
   }
-  uint8_t a[Plen] = {0};
-  foldP(in, inlen, xorin);
-  a[inlen] ^= delim;
-  a[rate - 1] ^= 0x80;
-  xorin(a, in, inlen);
-  keccakf(a);
-  foldP(out, outlen, setout);
-  setout(a, out, outlen);
-  memset_s(a, 200, 0, 200);
-  return 0;
+  KF_HASH_BODY(keccakf);
+}
+
+static inline int kf_hash12(uint8_t *out, size_t outlen, const uint8_t *in,
+                            size_t inlen, size_t rate, uint8_t delim) {
+  if ((out == NULL) || ((in == NULL) && inlen != 0) || (rate >= Plen)) {
+    return -1;
+  }
+  KF_HASH_BODY(keccak12);
 }
 
 #define defshake(bits)                                                         \
   KF_LINKAGE int KF_FN(shake##bits)(uint8_t *out, size_t outlen,               \
                                     const uint8_t *in, size_t inlen) {         \
-    return kf_hash_impl(out, outlen, in, inlen, 200 - (bits / 4), 0x1f);       \
+    return kf_hash24(out, outlen, in, inlen, 200 - (bits / 4), 0x1f);          \
   }
 #define defsha3(bits)                                                          \
   KF_LINKAGE int KF_FN(sha3_##bits)(uint8_t *out, size_t outlen,               \
@@ -124,7 +139,12 @@ static inline int kf_hash_impl(uint8_t *out, size_t outlen,
     if (outlen > (bits / 8)) {                                                 \
       return -1;                                                               \
     }                                                                          \
-    return kf_hash_impl(out, outlen, in, inlen, 200 - (bits / 4), 0x06);       \
+    return kf_hash24(out, outlen, in, inlen, 200 - (bits / 4), 0x06);          \
+  }
+#define defturboshake(bits)                                                    \
+  KF_LINKAGE int KF_FN(turboshake##bits)(uint8_t *out, size_t outlen,          \
+                                         const uint8_t *in, size_t inlen) {    \
+    return kf_hash12(out, outlen, in, inlen, 200 - (bits / 4), 0x1f);          \
   }
 
 defshake(128)
@@ -133,8 +153,11 @@ defsha3(224)
 defsha3(256)
 defsha3(384)
 defsha3(512)
+defturboshake(128)
+defturboshake(256)
 
 #undef defshake
 #undef defsha3
+#undef defturboshake
 
 #endif /* FINWO_SCALAR_IMPL_H */

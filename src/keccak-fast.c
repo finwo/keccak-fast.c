@@ -14,6 +14,8 @@ kf_hash_fn kf_sha3_224 = kf_scalar_sha3_224;
 kf_hash_fn kf_sha3_256 = kf_scalar_sha3_256;
 kf_hash_fn kf_sha3_384 = kf_scalar_sha3_384;
 kf_hash_fn kf_sha3_512 = kf_scalar_sha3_512;
+kf_hash_fn kf_turboshake128 = kf_scalar_turboshake128;
+kf_hash_fn kf_turboshake256 = kf_scalar_turboshake256;
 
 int         kf_backend_priority = KF_PRIO_SCALAR;
 const char *kf_backend_label    = "scalar";

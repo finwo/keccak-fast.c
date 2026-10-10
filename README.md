@@ -1,8 +1,8 @@
 # keccak-fast
 
-Drop-in-speed replacement for `coruus/keccak-tiny`. Six SHA-3/SHAKE one-shots
-plus batch entry points. Plain C11, libc only, no build flags,
-runtime-dispatched, thread-safe.
+Drop-in-speed replacement for `coruus/keccak-tiny`. SHA-3/SHAKE one-shots,
+TurboSHAKE128/256, and batch entry points. Plain C11, libc only, no build
+flags, runtime-dispatched, thread-safe.
 
 ## Use
 
@@ -16,7 +16,9 @@ kf_shake256_batch(count, in, inlen, out, outlen);   /* equal-length, packed */
 The one-shots (`kf_shake128`, `kf_shake256`, `kf_sha3_224`, `kf_sha3_256`,
 `kf_sha3_384`, `kf_sha3_512`) are `kf_hash_fn` table entries: a call is one
 indirect jump. Batch variants are `kf_<algo>_batch`, taking `count`
-equal-length messages packed back to back.
+equal-length messages packed back to back. `kf_turboshake128` and
+`kf_turboshake256` implement TurboSHAKE (same sponge over Keccak-p[1600,12],
+domain `0x1F`), about 1.9x faster than SHAKE.
 
 ## Build
 

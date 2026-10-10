@@ -43,6 +43,8 @@ __attribute__((constructor)) static void kf_bmi_register(void) {
     kf_sha3_256 = kf_bmi_sha3_256;
     kf_sha3_384 = kf_bmi_sha3_384;
     kf_sha3_512 = kf_bmi_sha3_512;
+    kf_turboshake128 = kf_bmi_turboshake128;
+    kf_turboshake256 = kf_bmi_turboshake256;
     kf_backend_priority = KF_PRIO_BMI;
     kf_backend_label    = "scalar+bmi";
   }
