@@ -1,0 +1,206 @@
+#ifndef FINWO_SCALAR_PERM_H
+#define FINWO_SCALAR_PERM_H
+
+/* Keccak-p[1600] with the 25 lanes held in named locals rather than an indexed
+   array, so the scheduler can keep them in registers; theta is fused into the
+   previous round's chi (prepareTheta) and the round loop is unrolled 4x. */
+
+#define KFP_LOAD(P, S) \
+  P##0 = S[0]; \
+  P##1 = S[1]; \
+  P##2 = S[2]; \
+  P##3 = S[3]; \
+  P##4 = S[4]; \
+  P##5 = S[5]; \
+  P##6 = S[6]; \
+  P##7 = S[7]; \
+  P##8 = S[8]; \
+  P##9 = S[9]; \
+  P##10 = S[10]; \
+  P##11 = S[11]; \
+  P##12 = S[12]; \
+  P##13 = S[13]; \
+  P##14 = S[14]; \
+  P##15 = S[15]; \
+  P##16 = S[16]; \
+  P##17 = S[17]; \
+  P##18 = S[18]; \
+  P##19 = S[19]; \
+  P##20 = S[20]; \
+  P##21 = S[21]; \
+  P##22 = S[22]; \
+  P##23 = S[23]; \
+  P##24 = S[24]; \
+
+#define KFP_STORE(S, P) \
+  S[0] = P##0; \
+  S[1] = P##1; \
+  S[2] = P##2; \
+  S[3] = P##3; \
+  S[4] = P##4; \
+  S[5] = P##5; \
+  S[6] = P##6; \
+  S[7] = P##7; \
+  S[8] = P##8; \
+  S[9] = P##9; \
+  S[10] = P##10; \
+  S[11] = P##11; \
+  S[12] = P##12; \
+  S[13] = P##13; \
+  S[14] = P##14; \
+  S[15] = P##15; \
+  S[16] = P##16; \
+  S[17] = P##17; \
+  S[18] = P##18; \
+  S[19] = P##19; \
+  S[20] = P##20; \
+  S[21] = P##21; \
+  S[22] = P##22; \
+  S[23] = P##23; \
+  S[24] = P##24; \
+
+#define KFP_INIT_C(SRC) \
+  c0 = SRC##0 ^ SRC##5 ^ SRC##10 ^ SRC##15 ^ SRC##20; \
+  c1 = SRC##1 ^ SRC##6 ^ SRC##11 ^ SRC##16 ^ SRC##21; \
+  c2 = SRC##2 ^ SRC##7 ^ SRC##12 ^ SRC##17 ^ SRC##22; \
+  c3 = SRC##3 ^ SRC##8 ^ SRC##13 ^ SRC##18 ^ SRC##23; \
+  c4 = SRC##4 ^ SRC##9 ^ SRC##14 ^ SRC##19 ^ SRC##24; \
+
+#define KFP_R(SRC, DST, RCIDX) \
+  d0 = c4 ^ rol(c1, 1); \
+  d1 = c0 ^ rol(c2, 1); \
+  d2 = c1 ^ rol(c3, 1); \
+  d3 = c2 ^ rol(c4, 1); \
+  d4 = c3 ^ rol(c0, 1); \
+  SRC##0 ^= d0; \
+  b0 = SRC##0; \
+  SRC##6 ^= d1; \
+  b1 = rol(SRC##6, 44); \
+  SRC##12 ^= d2; \
+  b2 = rol(SRC##12, 43); \
+  SRC##18 ^= d3; \
+  b3 = rol(SRC##18, 21); \
+  SRC##24 ^= d4; \
+  b4 = rol(SRC##24, 14); \
+  DST##0 = b0 ^ ((~b1) & b2); \
+  DST##1 = b1 ^ ((~b2) & b3); \
+  DST##2 = b2 ^ ((~b3) & b4); \
+  DST##3 = b3 ^ ((~b4) & b0); \
+  DST##4 = b4 ^ ((~b0) & b1); \
+  DST##0 ^= RC[RCIDX]; \
+  c0 = DST##0; \
+  c1 = DST##1; \
+  c2 = DST##2; \
+  c3 = DST##3; \
+  c4 = DST##4; \
+  SRC##3 ^= d3; \
+  b5 = rol(SRC##3, 28); \
+  SRC##9 ^= d4; \
+  b6 = rol(SRC##9, 20); \
+  SRC##10 ^= d0; \
+  b7 = rol(SRC##10, 3); \
+  SRC##16 ^= d1; \
+  b8 = rol(SRC##16, 45); \
+  SRC##22 ^= d2; \
+  b9 = rol(SRC##22, 61); \
+  DST##5 = b5 ^ ((~b6) & b7); \
+  DST##6 = b6 ^ ((~b7) & b8); \
+  DST##7 = b7 ^ ((~b8) & b9); \
+  DST##8 = b8 ^ ((~b9) & b5); \
+  DST##9 = b9 ^ ((~b5) & b6); \
+  c0 ^= DST##5; \
+  c1 ^= DST##6; \
+  c2 ^= DST##7; \
+  c3 ^= DST##8; \
+  c4 ^= DST##9; \
+  SRC##1 ^= d1; \
+  b10 = rol(SRC##1, 1); \
+  SRC##7 ^= d2; \
+  b11 = rol(SRC##7, 6); \
+  SRC##13 ^= d3; \
+  b12 = rol(SRC##13, 25); \
+  SRC##19 ^= d4; \
+  b13 = rol(SRC##19, 8); \
+  SRC##20 ^= d0; \
+  b14 = rol(SRC##20, 18); \
+  DST##10 = b10 ^ ((~b11) & b12); \
+  DST##11 = b11 ^ ((~b12) & b13); \
+  DST##12 = b12 ^ ((~b13) & b14); \
+  DST##13 = b13 ^ ((~b14) & b10); \
+  DST##14 = b14 ^ ((~b10) & b11); \
+  c0 ^= DST##10; \
+  c1 ^= DST##11; \
+  c2 ^= DST##12; \
+  c3 ^= DST##13; \
+  c4 ^= DST##14; \
+  SRC##4 ^= d4; \
+  b15 = rol(SRC##4, 27); \
+  SRC##5 ^= d0; \
+  b16 = rol(SRC##5, 36); \
+  SRC##11 ^= d1; \
+  b17 = rol(SRC##11, 10); \
+  SRC##17 ^= d2; \
+  b18 = rol(SRC##17, 15); \
+  SRC##23 ^= d3; \
+  b19 = rol(SRC##23, 56); \
+  DST##15 = b15 ^ ((~b16) & b17); \
+  DST##16 = b16 ^ ((~b17) & b18); \
+  DST##17 = b17 ^ ((~b18) & b19); \
+  DST##18 = b18 ^ ((~b19) & b15); \
+  DST##19 = b19 ^ ((~b15) & b16); \
+  c0 ^= DST##15; \
+  c1 ^= DST##16; \
+  c2 ^= DST##17; \
+  c3 ^= DST##18; \
+  c4 ^= DST##19; \
+  SRC##2 ^= d2; \
+  b20 = rol(SRC##2, 62); \
+  SRC##8 ^= d3; \
+  b21 = rol(SRC##8, 55); \
+  SRC##14 ^= d4; \
+  b22 = rol(SRC##14, 39); \
+  SRC##15 ^= d0; \
+  b23 = rol(SRC##15, 41); \
+  SRC##21 ^= d1; \
+  b24 = rol(SRC##21, 2); \
+  DST##20 = b20 ^ ((~b21) & b22); \
+  DST##21 = b21 ^ ((~b22) & b23); \
+  DST##22 = b22 ^ ((~b23) & b24); \
+  DST##23 = b23 ^ ((~b24) & b20); \
+  DST##24 = b24 ^ ((~b20) & b21); \
+  c0 ^= DST##20; \
+  c1 ^= DST##21; \
+  c2 ^= DST##22; \
+  c3 ^= DST##23; \
+  c4 ^= DST##24; \
+
+#define KFP_R2(SRC, DST, I) KFP_R(SRC, DST, I) KFP_R(DST, SRC, I + 1)
+#define KFP_R4(SRC, DST, I) KFP_R2(SRC, DST, I) KFP_R2(SRC, DST, I + 2)
+#define KFP_R12(SRC, DST, I) \
+  KFP_R4(SRC, DST, I) KFP_R4(SRC, DST, I + 4) KFP_R4(SRC, DST, I + 8)
+
+#define KFP_DECL(P)                                                            \
+  uint64_t P##0, P##1, P##2, P##3, P##4, P##5, P##6, P##7, P##8, P##9,         \
+      P##10, P##11, P##12, P##13, P##14, P##15, P##16, P##17, P##18, P##19,    \
+      P##20, P##21, P##22, P##23, P##24
+
+#define KFP_BODY(ROUNDS)                                                       \
+  uint64_t *s = (uint64_t *)state;                                             \
+  KFP_DECL(a);                                                                 \
+  KFP_DECL(e);                                                                 \
+  KFP_DECL(b);                                                                 \
+  uint64_t c0, c1, c2, c3, c4, d0, d1, d2, d3, d4;                             \
+  KFP_LOAD(a, s)                                                               \
+  KFP_INIT_C(a)                                                                \
+  ROUNDS                                                                       \
+  KFP_STORE(s, a)
+
+static inline void keccakf(void *state) {
+  KFP_BODY(for (int i = 0; i < 24; i += 4) { KFP_R4(a, e, i) })
+}
+
+static inline void keccak12(void *state) {
+  KFP_BODY(for (int i = 12; i < 24; i += 4) { KFP_R4(a, e, i) })
+}
+
+#endif /* FINWO_SCALAR_PERM_H */

@@ -17,16 +17,6 @@ static inline int memset_s(void *dest, size_t destsz, int ch, size_t count) {
 }
 #endif
 
-static const uint8_t rho[24] = {
-  1, 3, 6, 10, 15, 21,
-  28, 36, 45, 55, 2, 14,
-  27, 41, 56, 8, 25, 43,
-  62, 18, 39, 61, 20, 44};
-static const uint8_t pi[24] = {
-  10, 7, 11, 17, 18, 3,
-  5, 16, 8, 21, 24, 4,
-  15, 23, 19, 13, 12, 2,
-  20, 14, 22, 9, 6, 1};
 static const uint64_t RC[24] = {
   1ULL, 0x8082ULL, 0x800000000000808aULL, 0x8000000080008000ULL,
   0x808bULL, 0x80000001ULL, 0x8000000080008081ULL, 0x8000000000008009ULL,
@@ -36,62 +26,8 @@ static const uint64_t RC[24] = {
   0x8000000080008081ULL, 0x8000000000008080ULL, 0x80000001ULL, 0x8000000080008008ULL};
 
 #define rol(x, s) (((x) << s) | ((x) >> (64 - s)))
-#define REPEAT6(e) e e e e e e
-#define REPEAT24(e) REPEAT6(e e e e)
-#define REPEAT5(e) e e e e e
-#define FOR5(v, s, e) \
-  v = 0;              \
-  REPEAT5(e; v += s;)
 
-/* Round loop unrolled 4x, after armed-keccak's roundx4: enough straight-line
-   work for the scheduler without the register spills a full 24x unroll causes. */
-#ifndef KF_UNROLL
-#define KF_UNROLL 4
-#endif
-
-#define KF_STR_(x) #x
-#define KF_STR(x) KF_STR_(x)
-
-#if KF_UNROLL > 0 && defined(__clang__)
-#define KF_UNROLL_PRAGMA _Pragma(KF_STR(clang loop unroll_count(KF_UNROLL)))
-#elif KF_UNROLL > 0 && defined(__GNUC__)
-#define KF_UNROLL_PRAGMA _Pragma(KF_STR(GCC unroll KF_UNROLL))
-#else
-#define KF_UNROLL_PRAGMA
-#endif
-
-#define KF_ROUNDS(FIRST)                                                        \
-  uint64_t *a    = (uint64_t *)state;                                           \
-  uint64_t  b[5] = {0};                                                         \
-  uint64_t  t    = 0;                                                           \
-  uint8_t   x, y;                                                               \
-  KF_UNROLL_PRAGMA                                                              \
-  for (int i = (FIRST); i < 24; i++) {                                          \
-    /* theta */                                                                 \
-    FOR5(x, 1, b[x] = 0; FOR5(y, 5, b[x] ^= a[x + y];))                         \
-    FOR5(x, 1, FOR5(y, 5, a[y + x] ^= b[(x + 4) % 5] ^ rol(b[(x + 1) % 5], 1);)) \
-    /* rho and pi */                                                            \
-    t = a[1];                                                                   \
-    x = 0;                                                                      \
-    REPEAT24(b[0] = a[pi[x]];                                                   \
-             a[pi[x]] = rol(t, rho[x]);                                         \
-             t = b[0];                                                          \
-             x++;)                                                              \
-    /* chi */                                                                   \
-    FOR5(y, 5,                                                                  \
-         FOR5(x, 1, b[x] = a[y + x];)                                          \
-         FOR5(x, 1, a[y + x] = b[x] ^ ((~b[(x + 1) % 5]) & b[(x + 2) % 5]);))  \
-    /* iota */                                                                  \
-    a[0] ^= RC[i];                                                              \
-  }
-
-static inline void keccakf(void *state) {
-  KF_ROUNDS(0)
-}
-
-static inline void keccak12(void *state) {
-  KF_ROUNDS(12)
-}
+#include "scalar-perm.h"
 
 #define _(S) do { S } while (0)
 #define FOR(i, ST, L, S) \

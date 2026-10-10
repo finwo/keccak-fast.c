@@ -42,12 +42,13 @@ Backends register from constructors; the highest available priority wins
 `kf_batch_name()` report the active ones. `KECCAK_FAST_NO_BMI`,
 `KECCAK_FAST_NO_AVX2` and `KECCAK_FAST_NO_AVX512` drop those backends.
 
-The scalar backend is the donor, pinned to the x86-64 baseline
+The scalar backend is pinned to the x86-64 baseline
 (`no-avx,no-avx2,no-avx512f,no-bmi,no-bmi2`) so a consumer's `-march=native`
-cannot vectorize it or emit BMI. The round loop is unrolled 4x, which beats
-both no unroll and a full 24x unroll. `scalar+bmi` is the same permutation with
-`bmi` enabled, which turns chi's `not`+`and` into `andn`; gcc also gets `rorx`
-for the rotates. About 11% faster than the donor.
+cannot vectorize it or emit BMI. Its permutation keeps the 25 lanes in named
+locals, fuses theta into the previous round's chi, and unrolls the round loop
+4x; that beats both no unroll and a full 24x unroll. `scalar+bmi` is the same
+permutation with `bmi` enabled, which turns chi's `not`+`and` into `andn`; gcc
+also gets `rorx` for the rotates. About 20% faster than the donor.
 
 ## Dev
 
@@ -61,6 +62,7 @@ rejected), `BENCH_CPU=<n>` selects the core.
 
 ## License
 
-See `LICENSE.md`. The scalar backend is derived from `coruus/keccak-tiny`
-(David Leon Gil, CC0).
+See `LICENSE.md`. The sponge is derived from `coruus/keccak-tiny` (David Leon
+Gil, CC0); the scalar permutation follows XKCP's public-domain `opt64`
+structure.
 
