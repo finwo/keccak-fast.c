@@ -51,6 +51,12 @@ locals, fuses theta into the previous round's chi, and unrolls the round loop
 permutation with `bmi` enabled, which turns chi's `not`+`and` into `andn`; gcc
 also gets `rorx` for the rotates. About 20% faster than the donor.
 
+The AVX2 and AVX-512 batch kernels hold the 4 or 8 messages of a group one per
+vector lane, so the 25 state words live in 25 vector registers. The state is
+transposed in 8x8 (or 4x4) blocks with unpack and shuffle instructions at the
+sponge boundary. Their round bodies unroll theta and chi by hand so `-O2` emits
+the same code as `-O3`.
+
 ## Dev
 
 ```

@@ -110,17 +110,65 @@ static inline void kf_avx2_round_x4(__m256i v[25], uint64_t rc) {
 __attribute__((target("avx2")))
 static void kf_permute_x4(uint64_t s[4][25]) {
   __m256i  v[25];
-  uint64_t tmp[4];
+  __m256i  t[4];
+  uint64_t tail[4];
 
-  for (int j = 0; j < 25; j++) {
-    for (int i = 0; i < 4; i++) tmp[i] = s[i][j];
-    v[j] = _mm256_loadu_si256((const __m256i *)tmp);
-  }
+/* 4x4 transpose of 64-bit elements: 4 unpack + 4 lane permute. */
+#define KF_TRANSPOSE4(T)                                                       \
+  do {                                                                         \
+    __m256i t0 = _mm256_unpacklo_epi64((T)[0], (T)[1]);                        \
+    __m256i t1 = _mm256_unpackhi_epi64((T)[0], (T)[1]);                        \
+    __m256i t2 = _mm256_unpacklo_epi64((T)[2], (T)[3]);                        \
+    __m256i t3 = _mm256_unpackhi_epi64((T)[2], (T)[3]);                        \
+    (T)[0] = _mm256_permute2x128_si256(t0, t2, 0x20);                          \
+    (T)[1] = _mm256_permute2x128_si256(t1, t3, 0x20);                          \
+    (T)[2] = _mm256_permute2x128_si256(t0, t2, 0x31);                          \
+    (T)[3] = _mm256_permute2x128_si256(t1, t3, 0x31);                          \
+  } while (0)
+
+#define KF_LOAD4(B)                                                            \
+  do {                                                                         \
+    for (int i = 0; i < 4; i++) {                                              \
+      t[i] = _mm256_loadu_si256((const void *)(s[i] + (B)));                   \
+    }                                                                          \
+    KF_TRANSPOSE4(t);                                                          \
+    for (int j = 0; j < 4; j++) v[(B) + j] = t[j];                             \
+  } while (0)
+
+  KF_LOAD4(0);
+  KF_LOAD4(4);
+  KF_LOAD4(8);
+  KF_LOAD4(12);
+  KF_LOAD4(16);
+  KF_LOAD4(20);
+  v[24] = _mm256_set_epi64x((long long)s[3][24], (long long)s[2][24],
+                            (long long)s[1][24], (long long)s[0][24]);
+
+#undef KF_LOAD4
+
   for (int i = 0; i < 24; i++) kf_avx2_round_x4(v, RC[i]);
-  for (int j = 0; j < 25; j++) {
-    _mm256_storeu_si256((__m256i *)tmp, v[j]);
-    for (int i = 0; i < 4; i++) s[i][j] = tmp[i];
-  }
+
+#define KF_STORE4(B)                                                           \
+  do {                                                                         \
+    for (int j = 0; j < 4; j++) t[j] = v[(B) + j];                             \
+    KF_TRANSPOSE4(t);                                                          \
+    for (int i = 0; i < 4; i++) {                                              \
+      _mm256_storeu_si256((void *)(s[i] + (B)), t[i]);                         \
+    }                                                                          \
+  } while (0)
+
+  KF_STORE4(0);
+  KF_STORE4(4);
+  KF_STORE4(8);
+  KF_STORE4(12);
+  KF_STORE4(16);
+  KF_STORE4(20);
+
+#undef KF_STORE4
+#undef KF_TRANSPOSE4
+
+  _mm256_storeu_si256((void *)tail, v[24]);
+  for (int i = 0; i < 4; i++) s[i][24] = tail[i];
 }
 
 __attribute__((target("avx2")))
