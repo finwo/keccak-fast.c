@@ -43,11 +43,29 @@ static const uint64_t RC[24] = {
   v = 0;              \
   REPEAT5(e; v += s;)
 
+/* Round loop unrolled 4x, after armed-keccak's roundx4: enough straight-line
+   work for the scheduler without the register spills a full 24x unroll causes. */
+#ifndef KF_UNROLL
+#define KF_UNROLL 4
+#endif
+
+#define KF_STR_(x) #x
+#define KF_STR(x) KF_STR_(x)
+
+#if KF_UNROLL > 0 && defined(__clang__)
+#define KF_UNROLL_PRAGMA _Pragma(KF_STR(clang loop unroll_count(KF_UNROLL)))
+#elif KF_UNROLL > 0 && defined(__GNUC__)
+#define KF_UNROLL_PRAGMA _Pragma(KF_STR(GCC unroll KF_UNROLL))
+#else
+#define KF_UNROLL_PRAGMA
+#endif
+
 #define KF_ROUNDS(FIRST)                                                        \
   uint64_t *a    = (uint64_t *)state;                                           \
   uint64_t  b[5] = {0};                                                         \
   uint64_t  t    = 0;                                                           \
   uint8_t   x, y;                                                               \
+  KF_UNROLL_PRAGMA                                                              \
   for (int i = (FIRST); i < 24; i++) {                                          \
     /* theta */                                                                 \
     FOR5(x, 1, b[x] = 0; FOR5(y, 5, b[x] ^= a[x + y];))                         \

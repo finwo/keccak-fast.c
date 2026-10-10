@@ -44,7 +44,8 @@ Backends register from constructors; the highest available priority wins
 
 The scalar backend is the donor, pinned to the x86-64 baseline
 (`no-avx,no-avx2,no-avx512f,no-bmi,no-bmi2`) so a consumer's `-march=native`
-cannot vectorize it or emit BMI. `scalar+bmi` is the same permutation with
+cannot vectorize it or emit BMI. The round loop is unrolled 4x, which beats
+both no unroll and a full 24x unroll. `scalar+bmi` is the same permutation with
 `bmi` enabled, which turns chi's `not`+`and` into `andn`; gcc also gets `rorx`
 for the rotates. About 11% faster than the donor.
 
