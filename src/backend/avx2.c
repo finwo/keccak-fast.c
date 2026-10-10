@@ -18,25 +18,41 @@ static const uint64_t RC[24] = {
 #define KF_ROL64(x, n) \
   _mm256_or_si256(_mm256_slli_epi64((x), (n)), _mm256_srli_epi64((x), 64 - (n)))
 
-__attribute__((target("avx2")))
+__attribute__((target("avx2"), always_inline))
 static inline void kf_avx2_round_x4(__m256i v[25], uint64_t rc) {
-  __m256i c[5];
-  __m256i d[5];
+  __m256i c0, c1, c2, c3, c4;
+  __m256i d0, d1, d2, d3, d4;
   __m256i t, u;
 
-  for (int x = 0; x < 5; x++) {
-    c[x] = _mm256_xor_si256(
-      _mm256_xor_si256(v[x], v[x + 5]),
-      _mm256_xor_si256(_mm256_xor_si256(v[x + 10], v[x + 15]), v[x + 20]));
-  }
-  for (int x = 0; x < 5; x++) {
-    d[x] = _mm256_xor_si256(c[(x + 4) % 5], KF_ROL64(c[(x + 1) % 5], 1));
-  }
-  for (int y = 0; y < 5; y++) {
-    for (int x = 0; x < 5; x++) {
-      v[x + 5 * y] = _mm256_xor_si256(v[x + 5 * y], d[x]);
-    }
-  }
+#define KF_C(x)                                                                \
+  _mm256_xor_si256(_mm256_xor_si256(v[x], v[(x) + 5]),                         \
+                   _mm256_xor_si256(_mm256_xor_si256(v[(x) + 10], v[(x) + 15]), \
+                                    v[(x) + 20]))
+  c0 = KF_C(0);
+  c1 = KF_C(1);
+  c2 = KF_C(2);
+  c3 = KF_C(3);
+  c4 = KF_C(4);
+#undef KF_C
+
+  d0 = _mm256_xor_si256(c4, KF_ROL64(c1, 1));
+  d1 = _mm256_xor_si256(c0, KF_ROL64(c2, 1));
+  d2 = _mm256_xor_si256(c1, KF_ROL64(c3, 1));
+  d3 = _mm256_xor_si256(c2, KF_ROL64(c4, 1));
+  d4 = _mm256_xor_si256(c3, KF_ROL64(c0, 1));
+
+#define KF_ADD(x, d)                                                           \
+  v[(x)]      = _mm256_xor_si256(v[(x)], (d));                                 \
+  v[(x) + 5]  = _mm256_xor_si256(v[(x) + 5], (d));                             \
+  v[(x) + 10] = _mm256_xor_si256(v[(x) + 10], (d));                            \
+  v[(x) + 15] = _mm256_xor_si256(v[(x) + 15], (d));                            \
+  v[(x) + 20] = _mm256_xor_si256(v[(x) + 20], (d));
+  KF_ADD(0, d0)
+  KF_ADD(1, d1)
+  KF_ADD(2, d2)
+  KF_ADD(3, d3)
+  KF_ADD(4, d4)
+#undef KF_ADD
 
   t = v[1];
 #define KF_RHOPI4(dest, rot)    \
@@ -71,14 +87,22 @@ static inline void kf_avx2_round_x4(__m256i v[25], uint64_t rc) {
   KF_RHOPI4(1, 44);
 #undef KF_RHOPI4
 
-  for (int y = 0; y < 5; y++) {
-    __m256i row[5];
-    for (int x = 0; x < 5; x++) row[x] = v[x + 5 * y];
-    for (int x = 0; x < 5; x++) {
-      v[x + 5 * y] = _mm256_xor_si256(
-        row[x], _mm256_andnot_si256(row[(x + 1) % 5], row[(x + 2) % 5]));
-    }
-  }
+#define KF_ROW(y)                                                              \
+  do {                                                                         \
+    __m256i r0 = v[(y)], r1 = v[(y) + 1], r2 = v[(y) + 2], r3 = v[(y) + 3],    \
+            r4 = v[(y) + 4];                                                   \
+    v[(y)]     = _mm256_xor_si256(r0, _mm256_andnot_si256(r1, r2));            \
+    v[(y) + 1] = _mm256_xor_si256(r1, _mm256_andnot_si256(r2, r3));            \
+    v[(y) + 2] = _mm256_xor_si256(r2, _mm256_andnot_si256(r3, r4));            \
+    v[(y) + 3] = _mm256_xor_si256(r3, _mm256_andnot_si256(r4, r0));            \
+    v[(y) + 4] = _mm256_xor_si256(r4, _mm256_andnot_si256(r0, r1));            \
+  } while (0)
+  KF_ROW(0);
+  KF_ROW(5);
+  KF_ROW(10);
+  KF_ROW(15);
+  KF_ROW(20);
+#undef KF_ROW
 
   v[0] = _mm256_xor_si256(v[0], _mm256_set1_epi64x((long long)rc));
 }

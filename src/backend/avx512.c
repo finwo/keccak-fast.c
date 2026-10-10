@@ -15,24 +15,41 @@ static const uint64_t RC[24] = {
   0x8000000000008002ULL, 0x8000000000000080ULL, 0x800aULL, 0x800000008000000aULL,
   0x8000000080008081ULL, 0x8000000000008080ULL, 0x80000001ULL, 0x8000000080008008ULL};
 
-__attribute__((target("avx512f")))
+__attribute__((target("avx512f"), always_inline))
 static inline void kf_avx512_round_x8(__m512i v[25], uint64_t rc) {
-  __m512i c[5];
-  __m512i d[5];
+  __m512i c0, c1, c2, c3, c4;
+  __m512i d0, d1, d2, d3, d4;
   __m512i t, u;
 
-  for (int x = 0; x < 5; x++) {
-    c[x] = _mm512_ternarylogic_epi64(v[x], v[x + 5], v[x + 10], 0x96);
-    c[x] = _mm512_ternarylogic_epi64(c[x], v[x + 15], v[x + 20], 0x96);
-  }
-  for (int x = 0; x < 5; x++) {
-    d[x] = _mm512_xor_si512(c[(x + 4) % 5], _mm512_rol_epi64(c[(x + 1) % 5], 1));
-  }
-  for (int y = 0; y < 5; y++) {
-    for (int x = 0; x < 5; x++) {
-      v[x + 5 * y] = _mm512_xor_si512(v[x + 5 * y], d[x]);
-    }
-  }
+#define KF_C(x)                                                                \
+  _mm512_ternarylogic_epi64(                                                   \
+    _mm512_ternarylogic_epi64(v[x], v[(x) + 5], v[(x) + 10], 0x96),            \
+    v[(x) + 15], v[(x) + 20], 0x96)
+  c0 = KF_C(0);
+  c1 = KF_C(1);
+  c2 = KF_C(2);
+  c3 = KF_C(3);
+  c4 = KF_C(4);
+#undef KF_C
+
+  d0 = _mm512_xor_si512(c4, _mm512_rol_epi64(c1, 1));
+  d1 = _mm512_xor_si512(c0, _mm512_rol_epi64(c2, 1));
+  d2 = _mm512_xor_si512(c1, _mm512_rol_epi64(c3, 1));
+  d3 = _mm512_xor_si512(c2, _mm512_rol_epi64(c4, 1));
+  d4 = _mm512_xor_si512(c3, _mm512_rol_epi64(c0, 1));
+
+#define KF_ADD(x, d)                                                           \
+  v[(x)]      = _mm512_xor_si512(v[(x)], (d));                                 \
+  v[(x) + 5]  = _mm512_xor_si512(v[(x) + 5], (d));                             \
+  v[(x) + 10] = _mm512_xor_si512(v[(x) + 10], (d));                            \
+  v[(x) + 15] = _mm512_xor_si512(v[(x) + 15], (d));                            \
+  v[(x) + 20] = _mm512_xor_si512(v[(x) + 20], (d));
+  KF_ADD(0, d0)
+  KF_ADD(1, d1)
+  KF_ADD(2, d2)
+  KF_ADD(3, d3)
+  KF_ADD(4, d4)
+#undef KF_ADD
 
   t = v[1];
 #define KF_RHOPI8(dest, rot)               \
@@ -67,14 +84,22 @@ static inline void kf_avx512_round_x8(__m512i v[25], uint64_t rc) {
   KF_RHOPI8(1, 44);
 #undef KF_RHOPI8
 
-  for (int y = 0; y < 5; y++) {
-    __m512i row[5];
-    for (int x = 0; x < 5; x++) row[x] = v[x + 5 * y];
-    for (int x = 0; x < 5; x++) {
-      v[x + 5 * y] =
-        _mm512_ternarylogic_epi64(row[x], row[(x + 1) % 5], row[(x + 2) % 5], 0xD2);
-    }
-  }
+#define KF_ROW(y)                                                              \
+  do {                                                                         \
+    __m512i r0 = v[(y)], r1 = v[(y) + 1], r2 = v[(y) + 2], r3 = v[(y) + 3],    \
+            r4 = v[(y) + 4];                                                   \
+    v[(y)]     = _mm512_ternarylogic_epi64(r0, r1, r2, 0xD2);                  \
+    v[(y) + 1] = _mm512_ternarylogic_epi64(r1, r2, r3, 0xD2);                  \
+    v[(y) + 2] = _mm512_ternarylogic_epi64(r2, r3, r4, 0xD2);                  \
+    v[(y) + 3] = _mm512_ternarylogic_epi64(r3, r4, r0, 0xD2);                  \
+    v[(y) + 4] = _mm512_ternarylogic_epi64(r4, r0, r1, 0xD2);                  \
+  } while (0)
+  KF_ROW(0);
+  KF_ROW(5);
+  KF_ROW(10);
+  KF_ROW(15);
+  KF_ROW(20);
+#undef KF_ROW
 
   v[0] = _mm512_xor_si512(v[0], _mm512_set1_epi64((long long)rc));
 }
