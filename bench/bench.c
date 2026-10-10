@@ -134,7 +134,7 @@ int main(void) {
   for (size_t i = 0; i < sizeof bin; i++) bin[i] = (uint8_t)(i * 17 + 3);
 
   printf("batch SHAKE256 32->32, per hash (%s)\n", kf_batch_name());
-  case_batch(kf_batch_name(), kf_shake256_batch, 4, 32, 32, bin, bout, reps,
+  case_batch(kf_batch_name(), kf_shake256_batch, 8, 32, 32, bin, bout, reps,
              target_ns);
   case_batch(kf_batch_name(), kf_shake256_batch, 64, 32, 32, bin, bout, reps,
              target_ns);
@@ -142,7 +142,7 @@ int main(void) {
              target_ns);
 
   printf("batch SHA3-256 32->32, per hash (%s)\n", kf_batch_name());
-  case_batch(kf_batch_name(), kf_sha3_256_batch, 4, 32, 32, bin, bout, reps,
+  case_batch(kf_batch_name(), kf_sha3_256_batch, 8, 32, 32, bin, bout, reps,
              target_ns);
   case_batch(kf_batch_name(), kf_sha3_256_batch, 64, 32, 32, bin, bout, reps,
              target_ns);
