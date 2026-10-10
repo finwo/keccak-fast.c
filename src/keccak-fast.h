@@ -28,6 +28,10 @@ int kf_sha3_384_batch(size_t count, const uint8_t *in, size_t inlen,
                       uint8_t *out, size_t outlen);
 int kf_sha3_512_batch(size_t count, const uint8_t *in, size_t inlen,
                       uint8_t *out, size_t outlen);
+int kf_turboshake128_batch(size_t count, const uint8_t *in, size_t inlen,
+                           uint8_t *out, size_t outlen);
+int kf_turboshake256_batch(size_t count, const uint8_t *in, size_t inlen,
+                           uint8_t *out, size_t outlen);
 
 const char *kf_backend_name(void);
 const char *kf_batch_name(void);

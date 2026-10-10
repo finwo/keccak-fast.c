@@ -14,11 +14,12 @@ kf_shake256_batch(count, in, inlen, out, outlen);   /* equal-length, packed */
 ```
 
 The one-shots (`kf_shake128`, `kf_shake256`, `kf_sha3_224`, `kf_sha3_256`,
-`kf_sha3_384`, `kf_sha3_512`) are `kf_hash_fn` table entries: a call is one
-indirect jump. Batch variants are `kf_<algo>_batch`, taking `count`
-equal-length messages packed back to back. `kf_turboshake128` and
-`kf_turboshake256` implement TurboSHAKE (same sponge over Keccak-p[1600,12],
-domain `0x1F`), about 1.9x faster than SHAKE.
+`kf_sha3_384`, `kf_sha3_512`, `kf_turboshake128`, `kf_turboshake256`) are
+`kf_hash_fn` table entries: a call is one indirect jump. Batch variants are
+`kf_<algo>_batch`, taking `count` equal-length messages packed back to back.
+TurboSHAKE is the same sponge over Keccak-p[1600,12] with domain `0x1F`, about
+1.9x faster than SHAKE; its batch entries use a separately registered 12-round
+permutation.
 
 ## Build
 

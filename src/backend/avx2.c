@@ -100,6 +100,22 @@ static void kf_permute_x4(uint64_t s[4][25]) {
 }
 
 __attribute__((target("avx2")))
+static void kf_permute_x4_12(uint64_t s[4][25]) {
+  __m256i  v[25];
+  uint64_t tmp[4];
+
+  for (int j = 0; j < 25; j++) {
+    for (int i = 0; i < 4; i++) tmp[i] = s[i][j];
+    v[j] = _mm256_loadu_si256((const __m256i *)tmp);
+  }
+  for (int i = 12; i < 24; i++) kf_avx2_round_x4(v, RC[i]);
+  for (int j = 0; j < 25; j++) {
+    _mm256_storeu_si256((__m256i *)tmp, v[j]);
+    for (int i = 0; i < 4; i++) s[i][j] = tmp[i];
+  }
+}
+
+__attribute__((target("avx2")))
 void kf_avx2_batch(uint64_t states[][25], size_t count) {
   size_t i = 0;
   for (; i + 4 <= count; i += 4) {
@@ -110,12 +126,22 @@ void kf_avx2_batch(uint64_t states[][25], size_t count) {
   }
 }
 
+__attribute__((target("avx2")))
+void kf_avx2_batch12(uint64_t states[][25], size_t count) {
+  size_t i = 0;
+  for (; i + 4 <= count; i += 4) {
+    kf_permute_x4_12(&states[i]);
+  }
+  if (i < count) kf_scalar_batch12(&states[i], count - i);
+}
+
 __attribute__((constructor)) static void kf_avx2_register(void) {
   if (!__builtin_cpu_supports("avx2")) {
     return;
   }
   if (kf_batch_priority <= KF_PRIO_AVX2) {
     kf_batch_perm     = kf_avx2_batch;
+    kf_batch_perm12   = kf_avx2_batch12;
     kf_batch_priority = KF_PRIO_AVX2;
     kf_batch_lanes    = 4;
     kf_batch_label    = "avx2";

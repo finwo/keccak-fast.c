@@ -16,6 +16,7 @@ typedef void (*kf_batch_perm_fn)(uint64_t states[][25], size_t count);
 #define KF_PRIO_AVX512 30
 
 extern kf_batch_perm_fn kf_batch_perm;
+extern kf_batch_perm_fn kf_batch_perm12;
 extern int              kf_batch_priority;
 extern int              kf_batch_lanes;
 
@@ -41,18 +42,22 @@ int kf_scalar_turboshake256(uint8_t *out, size_t outlen, const uint8_t *in,
                             size_t inlen);
 void kf_scalar_permute(uint64_t state[25]);
 void kf_scalar_batch(uint64_t states[][25], size_t count);
+void kf_scalar_batch12(uint64_t states[][25], size_t count);
 
 #if (defined(__x86_64__) || defined(_M_X64) || defined(__i386__)) && \
   !defined(KECCAK_FAST_NO_BMI)
 void kf_bmi_batch(uint64_t states[][25], size_t count);
+void kf_bmi_batch12(uint64_t states[][25], size_t count);
 #endif
 #if (defined(__x86_64__) || defined(_M_X64) || defined(__i386__)) && \
   !defined(KECCAK_FAST_NO_AVX2)
 void kf_avx2_batch(uint64_t states[][25], size_t count);
+void kf_avx2_batch12(uint64_t states[][25], size_t count);
 #endif
 #if (defined(__x86_64__) || defined(_M_X64) || defined(__i386__)) && \
   !defined(KECCAK_FAST_NO_AVX512)
 void kf_avx512_batch(uint64_t states[][25], size_t count);
+void kf_avx512_batch12(uint64_t states[][25], size_t count);
 #endif
 
 #endif

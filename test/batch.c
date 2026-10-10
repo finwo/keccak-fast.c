@@ -35,6 +35,8 @@ int main(void) {
     {"sha3_256", kf_sha3_256, kf_sha3_256_batch, 32},
     {"sha3_384", kf_sha3_384, kf_sha3_384_batch, 48},
     {"sha3_512", kf_sha3_512, kf_sha3_512_batch, 64},
+    {"turboshake128", kf_turboshake128, kf_turboshake128_batch, 32},
+    {"turboshake256", kf_turboshake256, kf_turboshake256_batch, 64},
   };
   static const size_t counts[] = {1, 3, 4, 5, 8, 17};
   static const size_t inlens[] = {32, 200};

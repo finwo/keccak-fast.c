@@ -28,6 +28,12 @@ void kf_bmi_batch(uint64_t states[][25], size_t count) {
   }
 }
 
+void kf_bmi_batch12(uint64_t states[][25], size_t count) {
+  for (size_t i = 0; i < count; i++) {
+    keccak12(states[i]);
+  }
+}
+
 __attribute__((constructor)) static void kf_bmi_register(void) {
 #if defined(__clang__)
   if (!__builtin_cpu_supports("bmi")) {
@@ -50,6 +56,7 @@ __attribute__((constructor)) static void kf_bmi_register(void) {
   }
   if (kf_batch_priority <= KF_PRIO_BMI) {
     kf_batch_perm     = kf_bmi_batch;
+    kf_batch_perm12   = kf_bmi_batch12;
     kf_batch_priority = KF_PRIO_BMI;
     kf_batch_lanes    = 1;
     kf_batch_label    = "scalar+bmi";

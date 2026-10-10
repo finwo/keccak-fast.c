@@ -96,6 +96,22 @@ static void kf_permute_x8(uint64_t s[8][25]) {
 }
 
 __attribute__((target("avx512f")))
+static void kf_permute_x8_12(uint64_t s[8][25]) {
+  __m512i  v[25];
+  uint64_t tmp[8];
+
+  for (int j = 0; j < 25; j++) {
+    for (int i = 0; i < 8; i++) tmp[i] = s[i][j];
+    v[j] = _mm512_loadu_si512((const __m512i *)tmp);
+  }
+  for (int i = 12; i < 24; i++) kf_avx512_round_x8(v, RC[i]);
+  for (int j = 0; j < 25; j++) {
+    _mm512_storeu_si512((__m512i *)tmp, v[j]);
+    for (int i = 0; i < 8; i++) s[i][j] = tmp[i];
+  }
+}
+
+__attribute__((target("avx512f")))
 void kf_avx512_batch(uint64_t states[][25], size_t count) {
   size_t i = 0;
   for (; i + 8 <= count; i += 8) {
@@ -106,12 +122,22 @@ void kf_avx512_batch(uint64_t states[][25], size_t count) {
   }
 }
 
+__attribute__((target("avx512f")))
+void kf_avx512_batch12(uint64_t states[][25], size_t count) {
+  size_t i = 0;
+  for (; i + 8 <= count; i += 8) {
+    kf_permute_x8_12(&states[i]);
+  }
+  if (i < count) kf_scalar_batch12(&states[i], count - i);
+}
+
 __attribute__((constructor)) static void kf_avx512_register(void) {
   if (!__builtin_cpu_supports("avx512f")) {
     return;
   }
   if (kf_batch_priority <= KF_PRIO_AVX512) {
     kf_batch_perm     = kf_avx512_batch;
+    kf_batch_perm12   = kf_avx512_batch12;
     kf_batch_priority = KF_PRIO_AVX512;
     kf_batch_lanes    = 8;
     kf_batch_label    = "avx512";
