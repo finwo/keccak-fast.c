@@ -1,5 +1,7 @@
+#if defined(__linux__)
 #define _GNU_SOURCE
 #include <sched.h>
+#endif
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,10 +30,15 @@ static uint64_t now_ns(void) {
 }
 
 static int pin_cpu(int cpu) {
+#if defined(__linux__)
   cpu_set_t set;
   CPU_ZERO(&set);
   CPU_SET(cpu, &set);
   return sched_setaffinity(0, sizeof set, &set);
+#else
+  (void)cpu;
+  return -1;
+#endif
 }
 
 static double time_once(kf_fn fn, uint8_t *out, size_t outlen,
