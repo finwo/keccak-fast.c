@@ -100,7 +100,7 @@ static void kf_permute_x4(uint64_t s[4][25]) {
 }
 
 __attribute__((target("avx2")))
-static void kf_avx2_batch(uint64_t states[][25], size_t count) {
+void kf_avx2_batch(uint64_t states[][25], size_t count) {
   size_t i = 0;
   for (; i + 4 <= count; i += 4) {
     kf_permute_x4(&states[i]);

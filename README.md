@@ -54,7 +54,7 @@ also gets `rorx` for the rotates. About 20% faster than the donor.
 
 ```
 make test    # KAT and batch differential (TAP)
-make bench   # vendored donor, pinned core, best-of-nine ns/hash
+make bench   # per-hash table: scalar, scalar+bmi, avx2, avx512 (+ donor)
 ```
 
 `bench/` fetches the donor via `dep install`. `OPT=-O2|-O3` (arch flags

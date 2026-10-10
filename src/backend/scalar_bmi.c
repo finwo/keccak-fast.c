@@ -22,7 +22,7 @@
 #define KF_LINKAGE static
 #include "scalar-impl.h"
 
-static void kf_bmi_batch(uint64_t states[][25], size_t count) {
+void kf_bmi_batch(uint64_t states[][25], size_t count) {
   for (size_t i = 0; i < count; i++) {
     keccakf(states[i]);
   }

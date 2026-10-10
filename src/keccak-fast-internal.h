@@ -42,4 +42,17 @@ int kf_scalar_turboshake256(uint8_t *out, size_t outlen, const uint8_t *in,
 void kf_scalar_permute(uint64_t state[25]);
 void kf_scalar_batch(uint64_t states[][25], size_t count);
 
+#if (defined(__x86_64__) || defined(_M_X64) || defined(__i386__)) && \
+  !defined(KECCAK_FAST_NO_BMI)
+void kf_bmi_batch(uint64_t states[][25], size_t count);
+#endif
+#if (defined(__x86_64__) || defined(_M_X64) || defined(__i386__)) && \
+  !defined(KECCAK_FAST_NO_AVX2)
+void kf_avx2_batch(uint64_t states[][25], size_t count);
+#endif
+#if (defined(__x86_64__) || defined(_M_X64) || defined(__i386__)) && \
+  !defined(KECCAK_FAST_NO_AVX512)
+void kf_avx512_batch(uint64_t states[][25], size_t count);
+#endif
+
 #endif

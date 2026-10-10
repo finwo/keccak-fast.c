@@ -96,7 +96,7 @@ static void kf_permute_x8(uint64_t s[8][25]) {
 }
 
 __attribute__((target("avx512f")))
-static void kf_avx512_batch(uint64_t states[][25], size_t count) {
+void kf_avx512_batch(uint64_t states[][25], size_t count) {
   size_t i = 0;
   for (; i + 8 <= count; i += 8) {
     kf_permute_x8(&states[i]);
