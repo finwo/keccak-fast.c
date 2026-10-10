@@ -1,4 +1,3 @@
-#include <immintrin.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -6,6 +5,8 @@
 
 #if (defined(__x86_64__) || defined(_M_X64) || defined(__i386__)) && \
   !defined(KECCAK_FAST_NO_AVX512)
+
+#include <immintrin.h>
 
 static const uint64_t RC[24] = {
   1ULL, 0x8082ULL, 0x800000000000808aULL, 0x8000000080008000ULL,
