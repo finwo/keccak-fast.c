@@ -28,18 +28,22 @@ dep add finwo/keccak-fast
 
 ## Backends
 
-| backend | one-shot | batch |
-| ------- | -------- | ----- |
-| scalar  | yes      | —     |
-| AVX2    | no       | x4    |
+| backend    | one-shot | batch |
+| ---------- | -------- | ----- |
+| scalar     | yes      | —     |
+| scalar+bmi | yes      | —     |
+| AVX2       | no       | x4    |
 
 Backends register from constructors; the highest available priority wins
-(scalar 0, avx2 20, avx512 30). `kf_backend_name()` and `kf_batch_name()`
-report the active ones. `KECCAK_FAST_NO_AVX2` drops the AVX2 backend.
+(scalar 0, scalar+bmi 10, avx2 20, avx512 30). `kf_backend_name()` and
+`kf_batch_name()` report the active ones. `KECCAK_FAST_NO_BMI` and
+`KECCAK_FAST_NO_AVX2` drop those backends.
 
 The scalar backend is the donor, pinned to the x86-64 baseline
-(`no-avx,no-avx2,no-avx512f`) so a consumer's `-march=native` cannot vectorize
-it (clang runs 1.9x slower when it does).
+(`no-avx,no-avx2,no-avx512f,no-bmi,no-bmi2`) so a consumer's `-march=native`
+cannot vectorize it or emit BMI. `scalar+bmi` is the same permutation with
+`bmi` enabled, which turns chi's `not`+`and` into `andn`; gcc also gets `rorx`
+for the rotates. About 11% faster than the donor.
 
 ## Dev
 

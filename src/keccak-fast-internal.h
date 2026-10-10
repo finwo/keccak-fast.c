@@ -11,6 +11,7 @@ typedef void (*kf_batch_perm_fn)(uint64_t states[][25], size_t count);
 #define KF_LANES_MAX 8
 
 #define KF_PRIO_SCALAR  0
+#define KF_PRIO_BMI    10
 #define KF_PRIO_AVX2   20
 #define KF_PRIO_AVX512 30
 
