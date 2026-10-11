@@ -179,6 +179,9 @@ int main(void) {
     !defined(KECCAK_FAST_NO_AVX512)
   batch[nb++] = (batch_t){"avx512 x8", kf_avx512_batch, kf_avx512_batch12, 8};
 #endif
+#if defined(__aarch64__) && !defined(KECCAK_FAST_NO_SHA3)
+  batch[nb++] = (batch_t){"arm-sha3 x2", kf_armsha3_batch, kf_armsha3_batch12, 2};
+#endif
 
   case_all("SHA3-256 32->32, per hash", sha3, 2, batch, nb, kct_sha3_256,
            kf_sha3_256_batch, 64, 32, 32, in, out, reps, target_ns);

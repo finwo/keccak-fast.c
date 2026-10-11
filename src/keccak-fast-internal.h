@@ -12,6 +12,7 @@ typedef void (*kf_batch_perm_fn)(uint64_t states[][25], size_t count);
 
 #define KF_PRIO_SCALAR  0
 #define KF_PRIO_BMI    10
+#define KF_PRIO_SHA3   10
 #define KF_PRIO_AVX2   20
 #define KF_PRIO_AVX512 30
 
@@ -58,6 +59,11 @@ void kf_avx2_batch12(uint64_t states[][25], size_t count);
   !defined(KECCAK_FAST_NO_AVX512)
 void kf_avx512_batch(uint64_t states[][25], size_t count);
 void kf_avx512_batch12(uint64_t states[][25], size_t count);
+#endif
+
+#if defined(__aarch64__) && !defined(KECCAK_FAST_NO_SHA3)
+void kf_armsha3_batch(uint64_t states[][25], size_t count);
+void kf_armsha3_batch12(uint64_t states[][25], size_t count);
 #endif
 
 #endif
