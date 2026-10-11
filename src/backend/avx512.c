@@ -105,13 +105,9 @@ static inline void kf_avx512_round_x8(__m512i v[25], uint64_t rc) {
   v[0] = _mm512_xor_si512(v[0], _mm512_set1_epi64((long long)rc));
 }
 
-__attribute__((target("avx512f")))
-static void kf_permute_x8(uint64_t s[8][25]) {
-  __m512i  v[25];
-  __m512i  t[8];
-  uint64_t tail[8];
-
-/* 8x8 transpose of 64-bit elements: 8 unpack + 16 shuffle. */
+/* 8x8 transpose of 64-bit elements: 8 unpack + 16 shuffle. Shared by the
+   24-round and 12-round permutes; expands against the local names s, v, t and
+   tail. */
 #define KF_TRANSPOSE8(T)                                                       \
   do {                                                                         \
     __m512i t0 = _mm512_unpacklo_epi64((T)[0], (T)[1]);                        \
@@ -149,18 +145,6 @@ static void kf_permute_x8(uint64_t s[8][25]) {
     for (int j = 0; j < 8; j++) v[(B) + j] = t[j];                             \
   } while (0)
 
-  KF_LOAD8(0);
-  KF_LOAD8(8);
-  KF_LOAD8(16);
-  v[24] = _mm512_set_epi64((long long)s[7][24], (long long)s[6][24],
-                           (long long)s[5][24], (long long)s[4][24],
-                           (long long)s[3][24], (long long)s[2][24],
-                           (long long)s[1][24], (long long)s[0][24]);
-
-#undef KF_LOAD8
-
-  for (int i = 0; i < 24; i++) kf_avx512_round_x8(v, RC[i]);
-
 #define KF_STORE8(B)                                                           \
   do {                                                                         \
     for (int j = 0; j < 8; j++) t[j] = v[(B) + j];                             \
@@ -170,31 +154,46 @@ static void kf_permute_x8(uint64_t s[8][25]) {
     }                                                                          \
   } while (0)
 
-  KF_STORE8(0);
-  KF_STORE8(8);
-  KF_STORE8(16);
+#define KF_LOAD8_ALL()                                                         \
+  do {                                                                         \
+    KF_LOAD8(0);                                                               \
+    KF_LOAD8(8);                                                               \
+    KF_LOAD8(16);                                                              \
+    v[24] = _mm512_set_epi64((long long)s[7][24], (long long)s[6][24],         \
+                             (long long)s[5][24], (long long)s[4][24],         \
+                             (long long)s[3][24], (long long)s[2][24],         \
+                             (long long)s[1][24], (long long)s[0][24]);        \
+  } while (0)
 
-#undef KF_STORE8
-#undef KF_TRANSPOSE8
+#define KF_STORE8_ALL()                                                        \
+  do {                                                                         \
+    KF_STORE8(0);                                                              \
+    KF_STORE8(8);                                                              \
+    KF_STORE8(16);                                                             \
+    _mm512_storeu_si512((void *)tail, v[24]);                                  \
+    for (int i = 0; i < 8; i++) s[i][24] = tail[i];                            \
+  } while (0)
 
-  _mm512_storeu_si512((void *)tail, v[24]);
-  for (int i = 0; i < 8; i++) s[i][24] = tail[i];
+__attribute__((target("avx512f")))
+static void kf_permute_x8(uint64_t s[8][25]) {
+  __m512i  v[25];
+  __m512i  t[8];
+  uint64_t tail[8];
+
+  KF_LOAD8_ALL();
+  for (int i = 0; i < 24; i++) kf_avx512_round_x8(v, RC[i]);
+  KF_STORE8_ALL();
 }
 
 __attribute__((target("avx512f")))
 static void kf_permute_x8_12(uint64_t s[8][25]) {
   __m512i  v[25];
-  uint64_t tmp[8];
+  __m512i  t[8];
+  uint64_t tail[8];
 
-  for (int j = 0; j < 25; j++) {
-    for (int i = 0; i < 8; i++) tmp[i] = s[i][j];
-    v[j] = _mm512_loadu_si512((const __m512i *)tmp);
-  }
+  KF_LOAD8_ALL();
   for (int i = 12; i < 24; i++) kf_avx512_round_x8(v, RC[i]);
-  for (int j = 0; j < 25; j++) {
-    _mm512_storeu_si512((__m512i *)tmp, v[j]);
-    for (int i = 0; i < 8; i++) s[i][j] = tmp[i];
-  }
+  KF_STORE8_ALL();
 }
 
 __attribute__((target("avx512f")))
