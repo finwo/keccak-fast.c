@@ -124,13 +124,13 @@ static void case_all(const char *title, const oneshot_t *os, int nos,
 
   printf("%s\n", title);
   if (donor != NULL) {
-    printf("  %-10s %9.2f ns/hash %9.3f Mh/s\n", "donor", bd, 1000.0 / bd);
+    printf("  %-12s %9.2f ns/hash %9.3f Mh/s\n", "donor", bd, 1000.0 / bd);
   }
   for (int i = 0; i < nos; i++)
-    printf("  %-10s %9.2f ns/hash %9.3f Mh/s\n", os[i].label, bos[i],
+    printf("  %-12s %9.2f ns/hash %9.3f Mh/s\n", os[i].label, bos[i],
            1000.0 / bos[i]);
   for (int i = 0; i < nbs; i++)
-    printf("  %-10s %9.2f ns/hash %9.3f Mh/s\n", bs[i].label, bbs[i],
+    printf("  %-12s %9.2f ns/hash %9.3f Mh/s\n", bs[i].label, bbs[i],
            1000.0 / bbs[i]);
   printf("\n");
 }

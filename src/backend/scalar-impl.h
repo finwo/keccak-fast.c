@@ -9,14 +9,6 @@
 #define KF_CAT(a, b) KF_CAT2(a, b)
 #define KF_FN(name) KF_CAT(KF_PREFIX, name)
 
-#if !defined(__STDC_LIB_EXT1__)
-static inline int memset_s(void *dest, size_t destsz, int ch, size_t count) {
-  (void)destsz;
-  memset(dest, ch, count);
-  return 0;
-}
-#endif
-
 static const uint64_t RC[24] = {
   1ULL, 0x8082ULL, 0x800000000000808aULL, 0x8000000080008000ULL,
   0x808bULL, 0x80000001ULL, 0x8000000080008081ULL, 0x8000000000008009ULL,
@@ -63,7 +55,7 @@ mkapply_sd(setout, dst[i] = src[i])
   PERM(a);                                                                     \
   foldP(out, outlen, setout, PERM);                                            \
   setout(a, out, outlen);                                                      \
-  memset_s(a, 200, 0, 200);                                                    \
+  memset(a, 0, 200);                                                           \
   return 0
 
 static inline int kf_hash24(uint8_t *out, size_t outlen, const uint8_t *in,
