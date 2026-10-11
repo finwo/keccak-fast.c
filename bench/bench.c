@@ -11,6 +11,33 @@
 #include "keccak-fast.h"
 #include "keccak-fast-internal.h"
 
+#if defined(__aarch64__) && !defined(KECCAK_FAST_NO_SHA3)
+#if defined(__APPLE__)
+#include <sys/sysctl.h>
+#elif defined(__linux__)
+#include <sys/auxv.h>
+#include <asm/hwcap.h>
+#ifndef HWCAP_SHA3
+#define HWCAP_SHA3 (1 << 17)
+#endif
+#endif
+
+static int have_armsha3(void) {
+#if defined(__APPLE__)
+  int    v = 0;
+  size_t n = sizeof v;
+  if (sysctlbyname("hw.optional.arm.FEAT_SHA3", &v, &n, NULL, 0) != 0) {
+    return 0;
+  }
+  return v != 0;
+#elif defined(__linux__)
+  return (getauxval(AT_HWCAP) & HWCAP_SHA3) != 0;
+#else
+  return 0;
+#endif
+}
+#endif
+
 int kct_sha3_256(uint8_t *, size_t, const uint8_t *, size_t);
 int kct_shake256(uint8_t *, size_t, const uint8_t *, size_t);
 
@@ -173,14 +200,17 @@ int main(void) {
   int     nb = 0;
 #if (defined(__x86_64__) || defined(_M_X64) || defined(__i386__)) && \
     !defined(KECCAK_FAST_NO_AVX2)
-  batch[nb++] = (batch_t){"avx2 x4", kf_avx2_batch, kf_avx2_batch12, 4};
+  if (__builtin_cpu_supports("avx2"))
+    batch[nb++] = (batch_t){"avx2 x4", kf_avx2_batch, kf_avx2_batch12, 4};
 #endif
 #if (defined(__x86_64__) || defined(_M_X64) || defined(__i386__)) && \
     !defined(KECCAK_FAST_NO_AVX512)
-  batch[nb++] = (batch_t){"avx512 x8", kf_avx512_batch, kf_avx512_batch12, 8};
+  if (__builtin_cpu_supports("avx512f"))
+    batch[nb++] = (batch_t){"avx512 x8", kf_avx512_batch, kf_avx512_batch12, 8};
 #endif
 #if defined(__aarch64__) && !defined(KECCAK_FAST_NO_SHA3)
-  batch[nb++] = (batch_t){"arm-sha3 x2", kf_armsha3_batch, kf_armsha3_batch12, 2};
+  if (have_armsha3())
+    batch[nb++] = (batch_t){"arm-sha3 x2", kf_armsha3_batch, kf_armsha3_batch12, 2};
 #endif
 
   case_all("SHA3-256 32->32, per hash", sha3, 2, batch, nb, kct_sha3_256,
