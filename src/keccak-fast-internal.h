@@ -8,14 +8,6 @@
 
 typedef void (*kf_batch_perm_fn)(uint64_t states[][25], size_t count);
 
-#define KF_LANES_MAX 8
-
-#define KF_PRIO_SCALAR  0
-#define KF_PRIO_BMI    10
-#define KF_PRIO_SHA3   10
-#define KF_PRIO_AVX2   20
-#define KF_PRIO_AVX512 30
-
 extern kf_batch_perm_fn kf_batch_perm;
 extern kf_batch_perm_fn kf_batch_perm12;
 extern int              kf_batch_priority;
@@ -24,46 +16,5 @@ extern int              kf_batch_lanes;
 extern int         kf_backend_priority;
 extern const char *kf_backend_label;
 extern const char *kf_batch_label;
-
-int kf_scalar_shake128(uint8_t *out, size_t outlen, const uint8_t *in,
-                       size_t inlen);
-int kf_scalar_shake256(uint8_t *out, size_t outlen, const uint8_t *in,
-                       size_t inlen);
-int kf_scalar_sha3_224(uint8_t *out, size_t outlen, const uint8_t *in,
-                       size_t inlen);
-int kf_scalar_sha3_256(uint8_t *out, size_t outlen, const uint8_t *in,
-                       size_t inlen);
-int kf_scalar_sha3_384(uint8_t *out, size_t outlen, const uint8_t *in,
-                       size_t inlen);
-int kf_scalar_sha3_512(uint8_t *out, size_t outlen, const uint8_t *in,
-                       size_t inlen);
-int kf_scalar_turboshake128(uint8_t *out, size_t outlen, const uint8_t *in,
-                            size_t inlen);
-int kf_scalar_turboshake256(uint8_t *out, size_t outlen, const uint8_t *in,
-                            size_t inlen);
-void kf_scalar_permute(uint64_t state[25]);
-void kf_scalar_batch(uint64_t states[][25], size_t count);
-void kf_scalar_batch12(uint64_t states[][25], size_t count);
-
-#if (defined(__x86_64__) || defined(_M_X64) || defined(__i386__)) && \
-  !defined(KECCAK_FAST_NO_BMI)
-void kf_bmi_batch(uint64_t states[][25], size_t count);
-void kf_bmi_batch12(uint64_t states[][25], size_t count);
-#endif
-#if (defined(__x86_64__) || defined(_M_X64) || defined(__i386__)) && \
-  !defined(KECCAK_FAST_NO_AVX2)
-void kf_avx2_batch(uint64_t states[][25], size_t count);
-void kf_avx2_batch12(uint64_t states[][25], size_t count);
-#endif
-#if (defined(__x86_64__) || defined(_M_X64) || defined(__i386__)) && \
-  !defined(KECCAK_FAST_NO_AVX512)
-void kf_avx512_batch(uint64_t states[][25], size_t count);
-void kf_avx512_batch12(uint64_t states[][25], size_t count);
-#endif
-
-#if defined(__aarch64__) && !defined(KECCAK_FAST_NO_SHA3)
-void kf_armsha3_batch(uint64_t states[][25], size_t count);
-void kf_armsha3_batch12(uint64_t states[][25], size_t count);
-#endif
 
 #endif

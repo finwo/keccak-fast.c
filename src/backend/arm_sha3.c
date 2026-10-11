@@ -100,26 +100,25 @@ static inline int kf_hash12(uint8_t *out, size_t outlen, const uint8_t *in,
 }
 
 #define defshake(bits)                                                         \
-  KF_LINKAGE int KF_FN(shake##bits)(uint8_t *out, size_t outlen,               \
-                                    const uint8_t *in, size_t inlen) {         \
+  int KF_FN(shake##bits)(uint8_t *out, size_t outlen,                          \
+                         const uint8_t *in, size_t inlen) {                    \
     return kf_hash24(out, outlen, in, inlen, 200 - (bits / 4), 0x1f);          \
   }
 #define defsha3(bits)                                                          \
-  KF_LINKAGE int KF_FN(sha3_##bits)(uint8_t *out, size_t outlen,               \
-                                   const uint8_t *in, size_t inlen) {          \
+  int KF_FN(sha3_##bits)(uint8_t *out, size_t outlen,                          \
+                         const uint8_t *in, size_t inlen) {                    \
     if (outlen > (bits / 8)) {                                                 \
       return -1;                                                               \
     }                                                                          \
     return kf_hash24(out, outlen, in, inlen, 200 - (bits / 4), 0x06);          \
   }
 #define defturboshake(bits)                                                    \
-  KF_LINKAGE int KF_FN(turboshake##bits)(uint8_t *out, size_t outlen,          \
-                                         const uint8_t *in, size_t inlen) {    \
+  int KF_FN(turboshake##bits)(uint8_t *out, size_t outlen,                     \
+                              const uint8_t *in, size_t inlen) {               \
     return kf_hash12(out, outlen, in, inlen, 200 - (bits / 4), 0x1f);          \
   }
 
 #define KF_PREFIX kf_armsha3_
-#define KF_LINKAGE
 defshake(128)
 defshake(256)
 defsha3(224)
@@ -158,7 +157,7 @@ void kf_armsha3_batch12(uint64_t states[][25], size_t count) {
 #pragma GCC pop_options
 #endif
 
-static int kf_armsha3_available(void) {
+int kf_armsha3_available(void) {
 #if defined(__APPLE__)
   int    v = 0;
   size_t n = sizeof v;
@@ -177,7 +176,7 @@ __attribute__((constructor)) static void kf_armsha3_register(void) {
   if (!kf_armsha3_available()) {
     return;
   }
-  if (kf_backend_priority <= KF_PRIO_SHA3) {
+  if (kf_backend_priority <= 10) {
     kf_shake128      = kf_armsha3_shake128;
     kf_shake256      = kf_armsha3_shake256;
     kf_sha3_224      = kf_armsha3_sha3_224;
@@ -186,15 +185,15 @@ __attribute__((constructor)) static void kf_armsha3_register(void) {
     kf_sha3_512      = kf_armsha3_sha3_512;
     kf_turboshake128 = kf_armsha3_turboshake128;
     kf_turboshake256 = kf_armsha3_turboshake256;
-    kf_backend_priority = KF_PRIO_SHA3;
+    kf_backend_priority = 10;
     kf_backend_label    = "arm-sha3";
   }
-  if (kf_batch_priority <= KF_PRIO_SHA3) {
+  if (kf_batch_priority <= 10) {
     kf_batch_perm     = kf_armsha3_batch;
     kf_batch_perm12   = kf_armsha3_batch12;
-    kf_batch_priority = KF_PRIO_SHA3;
+    kf_batch_priority = 10;
     kf_batch_lanes    = 2;
-    kf_batch_label    = "arm-sha3 x2";
+    kf_batch_label    = "arm-sha3";
   }
 }
 

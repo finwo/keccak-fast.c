@@ -3,9 +3,36 @@
 #include <string.h>
 
 #include "keccak-fast.h"
+#include "keccak-fast-internal.h"
 
 typedef int (*kf_fn)(uint8_t *, size_t, const uint8_t *, size_t);
 typedef int (*kf_batch_fn)(size_t, const uint8_t *, size_t, uint8_t *, size_t);
+
+void kf_scalar_batch(uint64_t states[][25], size_t count);
+void kf_scalar_batch12(uint64_t states[][25], size_t count);
+
+#if (defined(__x86_64__) || defined(_M_X64) || defined(__i386__)) && \
+    !defined(KECCAK_FAST_NO_AVX2)
+void kf_avx2_batch(uint64_t states[][25], size_t count);
+void kf_avx2_batch12(uint64_t states[][25], size_t count);
+#endif
+#if (defined(__x86_64__) || defined(_M_X64) || defined(__i386__)) && \
+    !defined(KECCAK_FAST_NO_AVX512)
+void kf_avx512_batch(uint64_t states[][25], size_t count);
+void kf_avx512_batch12(uint64_t states[][25], size_t count);
+#endif
+#if defined(__aarch64__) && !defined(KECCAK_FAST_NO_SHA3)
+int  kf_armsha3_available(void);
+void kf_armsha3_batch(uint64_t states[][25], size_t count);
+void kf_armsha3_batch12(uint64_t states[][25], size_t count);
+#endif
+
+typedef struct {
+  const char      *label;
+  kf_batch_perm_fn perm;
+  kf_batch_perm_fn perm12;
+  int              lanes;
+} kernel;
 
 static int fails;
 static int testn;
@@ -44,41 +71,69 @@ int main(void) {
   static uint8_t      want[17 * 64];
   static uint8_t      got[17 * 64];
 
+  kernel kernels[4];
+  int    nk = 0;
+
+  kernels[nk++] = (kernel){"lanes=1", kf_scalar_batch, kf_scalar_batch12, 1};
+#if (defined(__x86_64__) || defined(_M_X64) || defined(__i386__)) && \
+    !defined(KECCAK_FAST_NO_AVX2)
+  if (__builtin_cpu_supports("avx2"))
+    kernels[nk++] = (kernel){"avx2 x4", kf_avx2_batch, kf_avx2_batch12, 4};
+#endif
+#if (defined(__x86_64__) || defined(_M_X64) || defined(__i386__)) && \
+    !defined(KECCAK_FAST_NO_AVX512)
+  if (__builtin_cpu_supports("avx512f"))
+    kernels[nk++] =
+        (kernel){"avx512 x8", kf_avx512_batch, kf_avx512_batch12, 8};
+#endif
+#if defined(__aarch64__) && !defined(KECCAK_FAST_NO_SHA3)
+  if (kf_armsha3_available())
+    kernels[nk++] =
+        (kernel){"arm-sha3 x2", kf_armsha3_batch, kf_armsha3_batch12, 2};
+#endif
+
   printf("1..%zu\n", (sizeof algos / sizeof algos[0]) *
                        (sizeof counts / sizeof counts[0]) *
-                       (sizeof inlens / sizeof inlens[0]));
+                       (sizeof inlens / sizeof inlens[0]) * (size_t)nk);
 
-  for (size_t a = 0; a < sizeof algos / sizeof algos[0]; a++) {
-    for (size_t ci = 0; ci < sizeof counts / sizeof counts[0]; ci++) {
-      size_t count = counts[ci];
-      for (size_t li = 0; li < sizeof inlens / sizeof inlens[0]; li++) {
-        size_t inlen  = inlens[li];
-        size_t outlen = algos[a].outlen;
-        char   name[64];
+  for (int k = 0; k < nk; k++) {
+    kf_batch_perm   = kernels[k].perm;
+    kf_batch_perm12 = kernels[k].perm12;
+    kf_batch_lanes  = kernels[k].lanes;
 
-        for (size_t m = 0; m < count; m++) {
-          for (size_t j = 0; j < inlen; j++) {
-            in[m * inlen + j] = (uint8_t)(j * 31 + m * 7 + 1);
+    for (size_t a = 0; a < sizeof algos / sizeof algos[0]; a++) {
+      for (size_t ci = 0; ci < sizeof counts / sizeof counts[0]; ci++) {
+        size_t count = counts[ci];
+        for (size_t li = 0; li < sizeof inlens / sizeof inlens[0]; li++) {
+          size_t inlen  = inlens[li];
+          size_t outlen = algos[a].outlen;
+          char   name[96];
+
+          for (size_t m = 0; m < count; m++) {
+            for (size_t j = 0; j < inlen; j++) {
+              in[m * inlen + j] = (uint8_t)(j * 31 + m * 7 + 1);
+            }
           }
-        }
-        for (size_t m = 0; m < count; m++) {
-          int rc = algos[a].one(want + m * outlen, outlen, in + m * inlen,
-                                inlen);
-          if (rc != 0) {
-            printf("# %s one-shot returned %d\n", algos[a].name, rc);
+          for (size_t m = 0; m < count; m++) {
+            int rc = algos[a].one(want + m * outlen, outlen, in + m * inlen,
+                                  inlen);
+            if (rc != 0) {
+              printf("# %s one-shot returned %d\n", algos[a].name, rc);
+            }
           }
-        }
 
-        memset(got, 0, count * outlen);
-        int rc = algos[a].batch(count, in, inlen, got, outlen);
-        snprintf(name, sizeof name, "%s count=%zu inlen=%zu", algos[a].name,
-                 count, inlen);
-        check(name, rc == 0 && memcmp(want, got, count * outlen) == 0);
+          memset(got, 0, count * outlen);
+          int rc = algos[a].batch(count, in, inlen, got, outlen);
+          snprintf(name, sizeof name, "%s %s count=%zu inlen=%zu",
+                   kernels[k].label, algos[a].name, count, inlen);
+          check(name, rc == 0 && memcmp(want, got, count * outlen) == 0);
+        }
       }
     }
   }
 
-  printf("# batch backend: %s\n", kf_batch_name());
+  printf("# dispatched backend: %s, batch: %s\n", kf_backend_name(),
+         kf_batch_name());
 
   if (fails != 0) printf("# %d failed\n", fails);
   return fails != 0;

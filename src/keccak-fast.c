@@ -8,23 +8,23 @@
 #define KF_DOMAIN_SHAKE 0x1f
 #define KF_DOMAIN_SHA3  0x06
 
-kf_hash_fn kf_shake128 = kf_scalar_shake128;
-kf_hash_fn kf_shake256 = kf_scalar_shake256;
-kf_hash_fn kf_sha3_224 = kf_scalar_sha3_224;
-kf_hash_fn kf_sha3_256 = kf_scalar_sha3_256;
-kf_hash_fn kf_sha3_384 = kf_scalar_sha3_384;
-kf_hash_fn kf_sha3_512 = kf_scalar_sha3_512;
-kf_hash_fn kf_turboshake128 = kf_scalar_turboshake128;
-kf_hash_fn kf_turboshake256 = kf_scalar_turboshake256;
+kf_hash_fn kf_shake128 = NULL;
+kf_hash_fn kf_shake256 = NULL;
+kf_hash_fn kf_sha3_224 = NULL;
+kf_hash_fn kf_sha3_256 = NULL;
+kf_hash_fn kf_sha3_384 = NULL;
+kf_hash_fn kf_sha3_512 = NULL;
+kf_hash_fn kf_turboshake128 = NULL;
+kf_hash_fn kf_turboshake256 = NULL;
 
-int         kf_backend_priority = KF_PRIO_SCALAR;
-const char *kf_backend_label    = "scalar";
+int         kf_backend_priority = 0;
+const char *kf_backend_label    = "none";
 
-kf_batch_perm_fn kf_batch_perm     = kf_scalar_batch;
-kf_batch_perm_fn kf_batch_perm12   = kf_scalar_batch12;
-int              kf_batch_priority = KF_PRIO_SCALAR;
+kf_batch_perm_fn kf_batch_perm     = NULL;
+kf_batch_perm_fn kf_batch_perm12   = NULL;
+int              kf_batch_priority = 0;
 int              kf_batch_lanes    = 1;
-const char      *kf_batch_label    = "scalar";
+const char      *kf_batch_label    = "none";
 
 const char *kf_backend_name(void) {
   return kf_backend_label;
@@ -43,10 +43,12 @@ static void kf_sponge_group(kf_batch_perm_fn perm, const uint8_t *in,
                             size_t inlen, uint8_t *out, size_t outlen,
                             size_t base, size_t count, size_t rate,
                             uint8_t delim) {
-  uint64_t       states[KF_LANES_MAX][25] = {0};
-  uint8_t       *a                        = (uint8_t *)states;
-  const uint8_t *p[KF_LANES_MAX];
-  uint8_t       *o[KF_LANES_MAX];
+  uint64_t       states[count][25];
+  uint8_t       *a = (uint8_t *)states;
+  const uint8_t *p[count];
+  uint8_t       *o[count];
+
+  memset(states, 0, sizeof states);
 
   for (size_t i = 0; i < count; i++) {
     p[i] = in + (base + i) * inlen;
@@ -93,7 +95,6 @@ static int kf_batch_impl(kf_hash_fn one, kf_batch_perm_fn perm, size_t count,
   if ((out == NULL) || ((in == NULL) && inlen != 0) || (rate >= 200)) return -1;
 
   int lanes = kf_batch_lanes;
-  if (lanes > KF_LANES_MAX) lanes = KF_LANES_MAX;
 
   size_t base = 0;
   if (lanes > 1) {

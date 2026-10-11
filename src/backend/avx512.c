@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "../keccak-fast-internal.h"
 
@@ -202,8 +203,11 @@ void kf_avx512_batch(uint64_t states[][25], size_t count) {
   for (; i + 8 <= count; i += 8) {
     kf_permute_x8(&states[i]);
   }
-  for (; i < count; i++) {
-    kf_scalar_permute(states[i]);
+  if (i < count) {
+    uint64_t tmp[8][25] = {0};
+    memcpy(tmp, &states[i], (count - i) * sizeof tmp[0]);
+    kf_permute_x8(tmp);
+    memcpy(&states[i], tmp, (count - i) * sizeof tmp[0]);
   }
 }
 
@@ -213,17 +217,22 @@ void kf_avx512_batch12(uint64_t states[][25], size_t count) {
   for (; i + 8 <= count; i += 8) {
     kf_permute_x8_12(&states[i]);
   }
-  if (i < count) kf_scalar_batch12(&states[i], count - i);
+  if (i < count) {
+    uint64_t tmp[8][25] = {0};
+    memcpy(tmp, &states[i], (count - i) * sizeof tmp[0]);
+    kf_permute_x8_12(tmp);
+    memcpy(&states[i], tmp, (count - i) * sizeof tmp[0]);
+  }
 }
 
 __attribute__((constructor)) static void kf_avx512_register(void) {
   if (!__builtin_cpu_supports("avx512f")) {
     return;
   }
-  if (kf_batch_priority <= KF_PRIO_AVX512) {
+  if (kf_batch_priority <= 30) {
     kf_batch_perm     = kf_avx512_batch;
     kf_batch_perm12   = kf_avx512_batch12;
-    kf_batch_priority = KF_PRIO_AVX512;
+    kf_batch_priority = 30;
     kf_batch_lanes    = 8;
     kf_batch_label    = "avx512";
   }

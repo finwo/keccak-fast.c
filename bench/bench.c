@@ -11,35 +11,28 @@
 #include "keccak-fast.h"
 #include "keccak-fast-internal.h"
 
-#if defined(__aarch64__) && !defined(KECCAK_FAST_NO_SHA3)
-#if defined(__APPLE__)
-#include <sys/sysctl.h>
-#elif defined(__linux__)
-#include <sys/auxv.h>
-#include <asm/hwcap.h>
-#ifndef HWCAP_SHA3
-#define HWCAP_SHA3 (1 << 17)
-#endif
-#endif
-
-static int have_armsha3(void) {
-#if defined(__APPLE__)
-  int    v = 0;
-  size_t n = sizeof v;
-  if (sysctlbyname("hw.optional.arm.FEAT_SHA3", &v, &n, NULL, 0) != 0) {
-    return 0;
-  }
-  return v != 0;
-#elif defined(__linux__)
-  return (getauxval(AT_HWCAP) & HWCAP_SHA3) != 0;
-#else
-  return 0;
-#endif
-}
-#endif
-
 int kct_sha3_256(uint8_t *, size_t, const uint8_t *, size_t);
 int kct_shake256(uint8_t *, size_t, const uint8_t *, size_t);
+
+int kf_scalar_sha3_256(uint8_t *, size_t, const uint8_t *, size_t);
+int kf_scalar_shake256(uint8_t *, size_t, const uint8_t *, size_t);
+int kf_scalar_turboshake256(uint8_t *, size_t, const uint8_t *, size_t);
+
+#if (defined(__x86_64__) || defined(_M_X64) || defined(__i386__)) && \
+    !defined(KECCAK_FAST_NO_AVX2)
+void kf_avx2_batch(uint64_t states[][25], size_t count);
+void kf_avx2_batch12(uint64_t states[][25], size_t count);
+#endif
+#if (defined(__x86_64__) || defined(_M_X64) || defined(__i386__)) && \
+    !defined(KECCAK_FAST_NO_AVX512)
+void kf_avx512_batch(uint64_t states[][25], size_t count);
+void kf_avx512_batch12(uint64_t states[][25], size_t count);
+#endif
+#if defined(__aarch64__) && !defined(KECCAK_FAST_NO_SHA3)
+int  kf_armsha3_available(void);
+void kf_armsha3_batch(uint64_t states[][25], size_t count);
+void kf_armsha3_batch12(uint64_t states[][25], size_t count);
+#endif
 
 #ifndef BENCH_FLAGS
 #define BENCH_FLAGS ""
@@ -131,6 +124,10 @@ static void case_all(const char *title, const oneshot_t *os, int nos,
     if (biters < 10) biters = 10;
   }
 
+  kf_batch_perm_fn saved_perm   = kf_batch_perm;
+  kf_batch_perm_fn saved_perm12 = kf_batch_perm12;
+  int              saved_lanes  = kf_batch_lanes;
+
   for (int r = 0; r < reps; r++) {
     if (donor != NULL) {
       double d = time_once(donor, out, outlen, in, inlen, iters);
@@ -148,6 +145,10 @@ static void case_all(const char *title, const oneshot_t *os, int nos,
       if (bbs[i] < 0.0 || v < bbs[i]) bbs[i] = v;
     }
   }
+
+  kf_batch_perm   = saved_perm;
+  kf_batch_perm12 = saved_perm12;
+  kf_batch_lanes  = saved_lanes;
 
   printf("%s\n", title);
   if (donor != NULL) {
@@ -209,7 +210,7 @@ int main(void) {
     batch[nb++] = (batch_t){"avx512 x8", kf_avx512_batch, kf_avx512_batch12, 8};
 #endif
 #if defined(__aarch64__) && !defined(KECCAK_FAST_NO_SHA3)
-  if (have_armsha3())
+  if (kf_armsha3_available())
     batch[nb++] = (batch_t){"arm-sha3 x2", kf_armsha3_batch, kf_armsha3_batch12, 2};
 #endif
 
