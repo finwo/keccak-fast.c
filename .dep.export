@@ -1,1 +1,2 @@
 include/finwo/keccak-fast.h src/keccak-fast.h
+include/finwo/keccak-fast-compat.h src/keccak-fast-compat.h

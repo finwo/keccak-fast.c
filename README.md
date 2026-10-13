@@ -14,13 +14,15 @@ kf_shake256_batch(count, in, inlen, out, outlen);   /* equal-length, packed */
 kf_shake256_chain(count, x, 32, tail, 8, 1, 0, 256);
 ```
 
-The one-shots (`kf_shake128`, `kf_shake256`, `kf_sha3_224`, `kf_sha3_256`,
-`kf_sha3_384`, `kf_sha3_512`, `kf_turboshake128`, `kf_turboshake256`) are
-`kf_hash_fn` table entries: a call is one indirect jump. Batch variants are
-`kf_<algo>_batch`, taking `count` equal-length messages packed back to back.
+`<algo>`: `shake128`, `shake256`, `sha3_224`, `sha3_256`, `sha3_384`,
+`sha3_512`, `turboshake128`, `turboshake256`.
+
+- `kf_<algo>`: one-shot, a `kf_hash_fn` pointer, so a call is one indirect jump
+- `kf_<algo>_batch`: `count` equal-length messages, packed back to back
+- `kf_<algo>_chain`: iterated, see below
+
 TurboSHAKE is the same sponge over Keccak-p[1600,12] with domain `0x1F`, about
-1.9x faster than SHAKE; its batch entries use a separately registered 12-round
-permutation.
+1.9x SHAKE, on a separately registered 12-round permutation.
 
 ## Chains
 
@@ -30,24 +32,32 @@ permutation.
 x_r = H(x_r || tail_r || ctr)      repeated `iters` times
 ```
 
-`tail_r` is `tail_len` caller-defined bytes, constant across iterations and
-packed back to back like the batch inputs. `ctr` is `ctr_len` bytes, 0 or 1,
-starting at `ctr0` and incremented every iteration, so all four of plain
-iterated hashing, counter-only chains, tweaked chains and both together are
-expressible. A wider counter is deliberately not offered: it would force an
-endianness choice into every kernel, and the construction composes by calling
-again with an updated tail.
+- `tail_r`: `tail_len` caller-defined bytes, constant across iterations, packed
+  back to back like the batch inputs
+- `ctr`: `ctr_len` bytes (0 or 1) from `ctr0`, incremented each iteration
+- returns `-1` unless `outlen + tail_len + ctr_len <= rate - 1`, i.e. one
+  permutation per iteration
 
-Each iteration must be a single permutation, so `outlen + tail_len + ctr_len`
-has to fit in `rate - 1`; anything larger returns `-1`. At the tight end that
-is SHA3-512, where `rate` is 72 and a 64-byte digest leaves 7 bytes.
+Covers plain iterated hashing, counter-only chains, tweaked chains, and both at
+once. No wider counter: forces an endianness choice into every kernel, and
+composes anyway by calling again with an updated tail.
 
-The win is that the vector backends keep the state in registers across
-iterations. The batch entry points only expose a permutation, so a feedback
-loop built on them pays a full transpose and a scalar byte-wise absorb per
-step; the chain kernels rewrite only the words below the digest and permute
-again. `kf_chain_name()` reports the active kernel, which is tracked and
-dispatched separately from the batch one.
+Tightest fit is SHA3-512: rate 72, 7 bytes beside the digest.
+
+Vector backends hold state in registers across iterations, `_batch` loop would
+pay transpose + scalar absorb per step.
+
+## Replacing keccak-tiny
+
+```c
+#include <finwo/keccak-fast-compat.h>   /* was <coruus/keccak-tiny.h> */
+```
+
+Maps the six `keccak-tiny` names onto their `kf_` equivalents, claims
+`KECCAK_FIPS202_H` so either include order works. Signatures are identical.
+
+Not carried over: `&sha3_256` and friends, the `kf_` names are dispatch
+pointers, not functions.
 
 ## Build
 
@@ -55,77 +65,61 @@ dispatched separately from the batch one.
 dep add finwo/keccak-fast
 ```
 
-`export.mk` lists the sources; `.dep.export` installs `<finwo/keccak-fast.h>`.
+`export.mk` lists the sources, `.dep.export` installs `<finwo/keccak-fast.h>`
+and `<finwo/keccak-fast-compat.h>`.
 
 ## Backends
 
-| backend    | one-shot | batch | chain    |
-| ---------- | -------- | ----- | -------- |
-| scalar     | yes      | -     | x1       |
-| scalar+bmi | yes      | -     | x1       |
-| arm-sha3   | yes      | x2    | x2       |
-| AVX2       | no       | x4    | x4 fused |
-| AVX-512    | no       | x8    | x8 fused |
+Lanes and priority per track:
 
-Backends register from constructors and the highest available priority wins.
-Priority is measured, not ranked: scalar is 100 and every other number is that
-backend's throughput relative to scalar on the same track, so 265 means 2.65x
-scalar. One-shot is scored on absorb MiB/s, batch and chain on hashes per
-second, both from `make bench` at SHA3-256.
+| backend    | one-shot | batch   | chain         |
+| ---------- | -------- | ------- | ------------- |
+| scalar     | 100      | x1, 100 | x1, 100       |
+| scalar+bmi | 115      | x1, 114 | x1, 114       |
+| arm-sha3   | 101      | x2, 182 | x2, 194       |
+| AVX2       | -        | x4, 218 | x4 fused, 265 |
+| AVX-512    | -        | x8, 447 | x8 fused, 786 |
 
-| backend    | one-shot | batch | chain |
-| ---------- | -------- | ----- | ----- |
-| scalar     | 100      | 100   | 100   |
-| scalar+bmi | 115      | 114   | 114   |
-| arm-sha3   | 101      | 182   | 194   |
-| AVX2       | -        | 218   | 265   |
-| AVX-512    | -        | 447   | 786   |
+Backends register from constructors, highest available priority wins. Priority
+is measured, not ranked: scalar is 100, the rest are throughput relative to it
+on the same track (265 = 2.65x scalar). One-shot scored on absorb MiB/s, batch
+and chain on hashes per second, from `make bench` at SHA3-256. An x1 batch has
+no vector kernel and falls through to the one-shot loop.
 
-These are a fixed approximation of a quantity that varies by core, so they
-encode the ordering rather than a promise. `arm-sha3` is the one to watch: it
-measures at parity with scalar for one-shot on a Cortex-A72 and about 1.4x on
-Apple silicon, so 101 is conservative and the pair kernels carry its win.
-Re-run `make bench` on a new target before trusting the one-shot ordering
-there. `kf_backend_name()`, `kf_batch_name()` and `kf_chain_name()` report the
-active ones. `KECCAK_FAST_NO_BMI`,
-`KECCAK_FAST_NO_AVX2`, `KECCAK_FAST_NO_AVX512` and `KECCAK_FAST_NO_SHA3` drop
-those backends.
+Numbers vary by core, so they encode ordering, not a promise. `arm-sha3` is the
+one to watch: scalar parity for one-shot on a Cortex-A72, ~1.4x on Apple
+silicon. Re-run `make bench` on a new target before trusting that ordering.
 
-The scalar backend is pinned to the x86-64 baseline
-(`no-avx,no-avx2,no-avx512f,no-bmi,no-bmi2`) so a consumer's `-march=native`
-cannot vectorize it or emit BMI. Its permutation keeps the 25 lanes in named
-locals, fuses theta into the previous round's chi, and unrolls the round loop
-4x; that beats both no unroll and a full 24x unroll. `scalar+bmi` is the same
-permutation with `bmi` enabled, which turns chi's `not`+`and` into `andn`; gcc
-also gets `rorx` for the rotates. About 20% faster than the donor.
+`kf_backend_name()`, `kf_batch_name()` and `kf_chain_name()` report the active
+backends. `KECCAK_FAST_NO_BMI`, `KECCAK_FAST_NO_AVX2`, `KECCAK_FAST_NO_AVX512`
+and `KECCAK_FAST_NO_SHA3` drop those backends.
 
-`arm-sha3` uses the ARMv8.2 SHA3 instructions (`eor3`, `bcax`, `rax1`, `xar`)
-under a scoped `target("sha3")` region, so no build flags are needed. It is
-self-contained: its own permutation and sponge, nothing shared with the scalar
-backend, and its 25 lanes live in named locals so the register allocator keeps
-them in NEON registers. Availability is checked at runtime only
-(`hw.optional.arm.FEAT_SHA3` on Darwin, `HWCAP_SHA3` on Linux); the x2 batch
-kernel packs two messages one per 64-bit half of each 128-bit register. About
-1.4x scalar for one-shots on Apple silicon and ~2x for the x2 batch; on some
-cores the one-shot lands at parity and the pair kernel carries the win.
+- `scalar`: pinned to cpu baseline (no extensions:
+  `no-avx,no-avx2,no-avx512f,no-bmi,no-bmi2`), so a consumer's `-march=native`
+  cannot vectorize it or emit BMI. 25 lanes in named locals, theta fused into
+  the previous round's chi, round loop unrolled 4x (beats no unroll and 24x).
+- `scalar+bmi`: same permutation with `bmi`, turning chi's `not`+`and` into
+  `andn`, gcc also gets `rorx` for the rotates. ~20% over the donor.
+- `arm-sha3`: ARMv8.2 `eor3`, `bcax`, `rax1`, `xar` under a scoped
+  `target("sha3")` region, no build flags. Self-contained: own permutation and
+  sponge, 25 lanes in named locals so they stay in NEON registers. Runtime
+  availability only (`hw.optional.arm.FEAT_SHA3` on Darwin, `HWCAP_SHA3` on
+  Linux). x2 kernels pack two messages per 128-bit register, ~2x scalar.
+- `AVX2`, `AVX-512`: 4 or 8 messages one per lane, 25 state words in 25 vector
+  registers, transposed in 4x4 or 8x8 blocks at the sponge boundary. Theta and
+  chi unrolled by hand, so `-O2` emits what `-O3` does.
 
-The AVX2 and AVX-512 batch kernels hold the 4 or 8 messages of a group one per
-vector lane, so the 25 state words live in 25 vector registers. The state is
-transposed in 8x8 (or 4x4) blocks with unpack and shuffle instructions at the
-sponge boundary. Their round bodies unroll theta and chi by hand so `-O2` emits
-the same code as `-O3`. Their chain kernels transpose once on entry and once on
-exit rather than per iteration, rebuilding the message in the transposed domain
-between permutations; a digest whose length is not a multiple of 8 leaves one
-word straddling the boundary, which is masked rather than copied. The scalar,
-`scalar+bmi` and `arm-sha3` chain kernels reuse their own permutations and
-rebuild the block in memory, so they gain correctness and batching but not the
-register residency.
+Chain kernels transpose on entry and exit only, rebuilding the message in the
+transposed domain between permutations. A digest length not a multiple of 8
+leaves one straddling word, masked rather than copied. `scalar`, `scalar+bmi`
+and `arm-sha3` rebuild the block in memory instead: batching, no register
+residency.
 
 ## Dev
 
 ```
-make test    # KAT, batch and chain differentials (TAP)
-make bench   # per-hash table: every backend, plus the donor
+make test    # KAT, batch, chain and compat differentials (TAP)
+make bench   # per-algo table: every backend, every mode, plus the donor
 ```
 
 `bench/` fetches the donor via `dep install`. `OPT=-O2|-O3` (arch flags
