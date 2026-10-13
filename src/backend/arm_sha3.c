@@ -151,6 +151,42 @@ void kf_armsha3_batch12(uint64_t states[][25], size_t count) {
   }
 }
 
+#define KF_DEFARMCHAIN(NAME, PERM2, PERM1)                                     \
+  void NAME(size_t count, uint8_t *x, size_t outlen, const uint8_t *tail,      \
+            size_t tail_len, size_t ctr_len, uint8_t ctr0, uint32_t iters,     \
+            size_t rate, uint8_t delim) {                                      \
+    uint64_t st[2][25];                                                        \
+    size_t   i = 0;                                                            \
+    for (; i + 2 <= count; i += 2) {                                           \
+      for (uint32_t it = 0; it < iters; it++) {                                \
+        for (size_t l = 0; l < 2; l++) {                                       \
+          const uint8_t *tr = tail_len ? tail + (i + l) * tail_len : NULL;     \
+          kf_chain_fill(st[l], x + (i + l) * outlen, outlen, tr, tail_len,     \
+                        ctr_len, (uint8_t)(ctr0 + it), rate, delim);           \
+        }                                                                      \
+        PERM2(st);                                                             \
+        for (size_t l = 0; l < 2; l++) {                                       \
+          memcpy(x + (i + l) * outlen, st[l], outlen);                         \
+        }                                                                      \
+      }                                                                        \
+    }                                                                          \
+    for (; i < count; i++) {                                                   \
+      uint8_t       *xr = x + i * outlen;                                      \
+      const uint8_t *tr = tail_len ? tail + i * tail_len : NULL;               \
+      for (uint32_t it = 0; it < iters; it++) {                                \
+        kf_chain_fill(st[0], xr, outlen, tr, tail_len, ctr_len,                \
+                      (uint8_t)(ctr0 + it), rate, delim);                      \
+        PERM1(st[0]);                                                          \
+        memcpy(xr, st[0], outlen);                                             \
+      }                                                                        \
+    }                                                                          \
+  }
+
+KF_DEFARMCHAIN(kf_armsha3_chain, keccakf2_armsha3, keccakf_armsha3)
+KF_DEFARMCHAIN(kf_armsha3_chain12, keccak12_2_armsha3, keccak12_armsha3)
+
+#undef KF_DEFARMCHAIN
+
 #if defined(__clang__)
 #pragma clang attribute pop
 #elif defined(__GNUC__)
@@ -176,7 +212,7 @@ __attribute__((constructor)) static void kf_armsha3_register(void) {
   if (!kf_armsha3_available()) {
     return;
   }
-  if (kf_backend_priority <= 10) {
+  if (kf_backend_priority <= 101) {
     kf_shake128      = kf_armsha3_shake128;
     kf_shake256      = kf_armsha3_shake256;
     kf_sha3_224      = kf_armsha3_sha3_224;
@@ -185,15 +221,22 @@ __attribute__((constructor)) static void kf_armsha3_register(void) {
     kf_sha3_512      = kf_armsha3_sha3_512;
     kf_turboshake128 = kf_armsha3_turboshake128;
     kf_turboshake256 = kf_armsha3_turboshake256;
-    kf_backend_priority = 10;
+    kf_backend_priority = 101;
     kf_backend_label    = "arm-sha3";
   }
-  if (kf_batch_priority <= 10) {
+  if (kf_batch_priority <= 182) {
     kf_batch_perm     = kf_armsha3_batch;
     kf_batch_perm12   = kf_armsha3_batch12;
-    kf_batch_priority = 10;
+    kf_batch_priority = 182;
     kf_batch_lanes    = 2;
     kf_batch_label    = "arm-sha3";
+  }
+  if (kf_chain_priority <= 194) {
+    kf_chain_kernel   = kf_armsha3_chain;
+    kf_chain_kernel12 = kf_armsha3_chain12;
+    kf_chain_priority = 194;
+    kf_chain_lanes    = 2;
+    kf_chain_label    = "arm-sha3";
   }
 }
 

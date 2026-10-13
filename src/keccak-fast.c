@@ -26,12 +26,22 @@ int              kf_batch_priority = 0;
 int              kf_batch_lanes    = 1;
 const char      *kf_batch_label    = "none";
 
+kf_chain_fn kf_chain_kernel   = NULL;
+kf_chain_fn kf_chain_kernel12 = NULL;
+int         kf_chain_priority = 0;
+int         kf_chain_lanes    = 1;
+const char *kf_chain_label    = "none";
+
 const char *kf_backend_name(void) {
   return kf_backend_label;
 }
 
 const char *kf_batch_name(void) {
   return kf_batch_label;
+}
+
+const char *kf_chain_name(void) {
+  return kf_chain_label;
 }
 
 static void kf_wipe(void *p, size_t n) {
@@ -137,3 +147,52 @@ KF_DEFSHA3_BATCH(384)
 KF_DEFSHA3_BATCH(512)
 KF_DEFTURBOSHAKE_BATCH(128)
 KF_DEFTURBOSHAKE_BATCH(256)
+
+static int kf_chain_impl(kf_chain_fn kernel, size_t count, uint8_t *x,
+                         size_t outlen, const uint8_t *tail, size_t tail_len,
+                         size_t ctr_len, uint8_t ctr0, uint32_t iters,
+                         size_t rate, uint8_t delim) {
+  if ((x == NULL) || ((tail == NULL) && (tail_len != 0))) return -1;
+  if ((outlen == 0) || (ctr_len > 1) || (rate >= 200)) return -1;
+  if (outlen + tail_len + ctr_len > rate - 1) return -1;
+  if ((kernel == NULL) || (kf_chain_lanes <= 0)) return -1;
+  if ((count == 0) || (iters == 0)) return 0;
+  kernel(count, x, outlen, tail, tail_len, ctr_len, ctr0, iters, rate, delim);
+  return 0;
+}
+
+#define KF_DEFSHAKE_CHAIN(bits)                                                \
+  int kf_shake##bits##_chain(size_t count, uint8_t *x, size_t outlen,          \
+                             const uint8_t *tail, size_t tail_len,             \
+                             size_t ctr_len, uint8_t ctr0, uint32_t iters) {   \
+    return kf_chain_impl(kf_chain_kernel, count, x, outlen, tail, tail_len,    \
+                         ctr_len, ctr0, iters, KF_RATE(bits),                  \
+                         KF_DOMAIN_SHAKE);                                     \
+  }
+#define KF_DEFSHA3_CHAIN(bits)                                                 \
+  int kf_sha3_##bits##_chain(size_t count, uint8_t *x, size_t outlen,          \
+                             const uint8_t *tail, size_t tail_len,             \
+                             size_t ctr_len, uint8_t ctr0, uint32_t iters) {   \
+    if (outlen > ((bits) / 8)) return -1;                                      \
+    return kf_chain_impl(kf_chain_kernel, count, x, outlen, tail, tail_len,    \
+                         ctr_len, ctr0, iters, KF_RATE(bits),                  \
+                         KF_DOMAIN_SHA3);                                      \
+  }
+#define KF_DEFTURBOSHAKE_CHAIN(bits)                                           \
+  int kf_turboshake##bits##_chain(size_t count, uint8_t *x, size_t outlen,     \
+                                  const uint8_t *tail, size_t tail_len,        \
+                                  size_t ctr_len, uint8_t ctr0,                \
+                                  uint32_t iters) {                            \
+    return kf_chain_impl(kf_chain_kernel12, count, x, outlen, tail, tail_len,  \
+                         ctr_len, ctr0, iters, KF_RATE(bits),                  \
+                         KF_DOMAIN_SHAKE);                                     \
+  }
+
+KF_DEFSHAKE_CHAIN(128)
+KF_DEFSHAKE_CHAIN(256)
+KF_DEFSHA3_CHAIN(224)
+KF_DEFSHA3_CHAIN(256)
+KF_DEFSHA3_CHAIN(384)
+KF_DEFSHA3_CHAIN(512)
+KF_DEFTURBOSHAKE_CHAIN(128)
+KF_DEFTURBOSHAKE_CHAIN(256)

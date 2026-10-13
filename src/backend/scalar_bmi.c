@@ -330,6 +330,28 @@ void kf_bmi_batch12(uint64_t states[][25], size_t count) {
   }
 }
 
+#define KF_DEFBMICHAIN(NAME, PERM)                                             \
+  void NAME(size_t count, uint8_t *x, size_t outlen, const uint8_t *tail,      \
+            size_t tail_len, size_t ctr_len, uint8_t ctr0, uint32_t iters,     \
+            size_t rate, uint8_t delim) {                                      \
+    uint64_t st[25];                                                           \
+    for (size_t r = 0; r < count; r++) {                                       \
+      uint8_t       *xr = x + r * outlen;                                      \
+      const uint8_t *tr = tail_len ? tail + r * tail_len : NULL;               \
+      for (uint32_t it = 0; it < iters; it++) {                                \
+        kf_chain_fill(st, xr, outlen, tr, tail_len, ctr_len,                   \
+                      (uint8_t)(ctr0 + it), rate, delim);                      \
+        PERM(st);                                                              \
+        memcpy(xr, st, outlen);                                                \
+      }                                                                        \
+    }                                                                          \
+  }
+
+KF_DEFBMICHAIN(kf_bmi_chain, keccakf)
+KF_DEFBMICHAIN(kf_bmi_chain12, keccak12)
+
+#undef KF_DEFBMICHAIN
+
 __attribute__((constructor)) static void kf_bmi_register(void) {
 #if defined(__clang__)
   if (!__builtin_cpu_supports("bmi")) {
@@ -338,7 +360,7 @@ __attribute__((constructor)) static void kf_bmi_register(void) {
 #endif
     return;
   }
-  if (kf_backend_priority <= 10) {
+  if (kf_backend_priority <= 115) {
     kf_shake128 = kf_bmi_shake128;
     kf_shake256 = kf_bmi_shake256;
     kf_sha3_224 = kf_bmi_sha3_224;
@@ -347,15 +369,22 @@ __attribute__((constructor)) static void kf_bmi_register(void) {
     kf_sha3_512 = kf_bmi_sha3_512;
     kf_turboshake128 = kf_bmi_turboshake128;
     kf_turboshake256 = kf_bmi_turboshake256;
-    kf_backend_priority = 10;
+    kf_backend_priority = 115;
     kf_backend_label    = "scalar+bmi";
   }
-  if (kf_batch_priority <= 10) {
+  if (kf_batch_priority <= 114) {
     kf_batch_perm     = kf_bmi_batch;
     kf_batch_perm12   = kf_bmi_batch12;
-    kf_batch_priority = 10;
+    kf_batch_priority = 114;
     kf_batch_lanes    = 1;
     kf_batch_label    = "scalar+bmi";
+  }
+  if (kf_chain_priority <= 114) {
+    kf_chain_kernel   = kf_bmi_chain;
+    kf_chain_kernel12 = kf_bmi_chain12;
+    kf_chain_priority = 114;
+    kf_chain_lanes    = 1;
+    kf_chain_label    = "scalar+bmi";
   }
 }
 

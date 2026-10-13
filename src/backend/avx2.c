@@ -216,16 +216,101 @@ void kf_avx2_batch12(uint64_t states[][25], size_t count) {
   }
 }
 
+__attribute__((target("avx2"), always_inline))
+static inline void kf_avx2_xin(uint64_t s[4][25], __m256i v[25]) {
+  __m256i t[4];
+  KF_LOAD4_ALL();
+}
+
+__attribute__((target("avx2"), always_inline))
+static inline void kf_avx2_xout(uint64_t s[4][25], __m256i v[25]) {
+  __m256i  t[4];
+  uint64_t tail[4];
+  KF_STORE4_ALL();
+}
+
+/* The digest stays in v; only the words below it are rewritten per iteration */
+#define KF_DEF_AVX2_CHAIN_X4(NAME, R0)                                         \
+  __attribute__((target("avx2"))) static void NAME(                            \
+      uint64_t s[4][25], uint64_t tmpl[4][25], size_t full_words,              \
+      uint64_t keep_mask, size_t ctr_word, unsigned ctr_shift, size_t ctr_len, \
+      uint8_t ctr0, uint32_t iters) {                                          \
+    __m256i v[25];                                                             \
+    __m256i tv[25];                                                            \
+    __m256i km = _mm256_set1_epi64x((long long)keep_mask);                     \
+    kf_avx2_xin(s, v);                                                         \
+    kf_avx2_xin(tmpl, tv);                                                     \
+    for (uint32_t it = 0;;) {                                                  \
+      for (int r = R0; r < 24; r++) kf_avx2_round_x4(v, RC[r]);                \
+      if (++it >= iters) break;                                                \
+      size_t w = full_words;                                                   \
+      if (keep_mask) {                                                         \
+        v[w] = _mm256_or_si256(_mm256_and_si256(v[w], km), tv[w]);             \
+        w++;                                                                   \
+      }                                                                        \
+      for (; w < 25; w++) v[w] = tv[w];                                        \
+      if (ctr_len) {                                                           \
+        uint64_t c = (uint64_t)(uint8_t)(ctr0 + it) << ctr_shift;              \
+        v[ctr_word] =                                                          \
+            _mm256_or_si256(v[ctr_word], _mm256_set1_epi64x((long long)c));    \
+      }                                                                        \
+    }                                                                          \
+    kf_avx2_xout(s, v);                                                        \
+  }
+
+KF_DEF_AVX2_CHAIN_X4(kf_avx2_chain_x4, 0)
+KF_DEF_AVX2_CHAIN_X4(kf_avx2_chain_x4_12, 12)
+
+#define KF_DEF_AVX2_CHAIN(NAME, X4)                                            \
+  __attribute__((target("avx2"))) void NAME(                                   \
+      size_t count, uint8_t *x, size_t outlen, const uint8_t *tail,            \
+      size_t tail_len, size_t ctr_len, uint8_t ctr0, uint32_t iters,           \
+      size_t rate, uint8_t delim) {                                            \
+    uint64_t s[4][25];                                                         \
+    uint64_t tmpl[4][25];                                                      \
+    size_t   fw   = outlen / 8;                                                \
+    size_t   part = outlen % 8;                                                \
+    uint64_t km   = part ? (((uint64_t)1 << (8 * part)) - 1) : 0;              \
+    size_t   cw   = (outlen + tail_len) / 8;                                   \
+    unsigned cs   = (unsigned)(8 * ((outlen + tail_len) % 8));                 \
+    for (size_t i = 0; i < count; i += 4) {                                    \
+      size_t n = count - i < 4 ? count - i : 4;                                \
+      for (size_t l = 0; l < 4; l++) {                                         \
+        int            live = l < n;                                           \
+        const uint8_t *tr =                                                    \
+            tail_len ? tail + (live ? (i + l) : 0) * tail_len : NULL;          \
+        kf_chain_fill(s[l], live ? x + (i + l) * outlen : NULL, outlen, tr,    \
+                      tail_len, ctr_len, ctr0, rate, delim);                   \
+        kf_chain_fill(tmpl[l], NULL, outlen, tr, tail_len, ctr_len, 0, rate,   \
+                      delim);                                                  \
+      }                                                                        \
+      X4(s, tmpl, fw, km, cw, cs, ctr_len, ctr0, iters);                       \
+      for (size_t l = 0; l < n; l++) {                                         \
+        memcpy(x + (i + l) * outlen, s[l], outlen);                            \
+      }                                                                        \
+    }                                                                          \
+  }
+
+KF_DEF_AVX2_CHAIN(kf_avx2_chain, kf_avx2_chain_x4)
+KF_DEF_AVX2_CHAIN(kf_avx2_chain12, kf_avx2_chain_x4_12)
+
 __attribute__((constructor)) static void kf_avx2_register(void) {
   if (!__builtin_cpu_supports("avx2")) {
     return;
   }
-  if (kf_batch_priority <= 20) {
+  if (kf_batch_priority <= 218) {
     kf_batch_perm     = kf_avx2_batch;
     kf_batch_perm12   = kf_avx2_batch12;
-    kf_batch_priority = 20;
+    kf_batch_priority = 218;
     kf_batch_lanes    = 4;
     kf_batch_label    = "avx2";
+  }
+  if (kf_chain_priority <= 265) {
+    kf_chain_kernel   = kf_avx2_chain;
+    kf_chain_kernel12 = kf_avx2_chain12;
+    kf_chain_priority = 265;
+    kf_chain_lanes    = 4;
+    kf_chain_label    = "avx2";
   }
 }
 
