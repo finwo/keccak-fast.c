@@ -5,7 +5,7 @@ CFLAGS += -std=c11 -I src
 
 LIB := src/keccak-fast.c $(wildcard src/backend/*.c)
 OUT := build
-BINS := $(OUT)/kat $(OUT)/batch
+BINS := $(OUT)/kat $(OUT)/batch $(OUT)/chain
 
 .PHONY: default test bench clean
 default: test
@@ -13,6 +13,7 @@ default: test
 test: $(BINS)
 	@$(OUT)/kat
 	@$(OUT)/batch
+	@$(OUT)/chain
 
 bench:
 	@$(MAKE) --no-print-directory --directory bench run
